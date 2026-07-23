@@ -1,5 +1,5 @@
--- // LEBXIA HUB • Grow a Garden 2 • Mobile v7.0
--- // Static autofarm • No teleport • Inventory interaction
+-- // LEBXIA HUB • Grow a Garden 2 • Mobile v7.1
+-- // Static autofarm • No teleport • Fixed UI
 
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
@@ -10,7 +10,6 @@ local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 
--- Colors
 local Green = Color3.fromRGB(80, 220, 100)
 local GreenDark = Color3.fromRGB(50, 150, 65)
 local BgMain = Color3.fromRGB(18, 22, 18)
@@ -19,14 +18,12 @@ local BgElement = Color3.fromRGB(30, 38, 30)
 local TextPrimary = Color3.fromRGB(220, 240, 220)
 local TextSecondary = Color3.fromRGB(160, 180, 160)
 
--- State
 local farmConnection = nil
 local farmStats = {collected = 0, sold = 0, earnings = 0, planted = 0, watered = 0}
 local blacklist = {}
 local statusLabel = nil
 local waterPlotIndex = 1
 
--- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LebxiaHub"
 ScreenGui.ResetOnSpawn = false
@@ -41,7 +38,6 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
--- Draggable
 local dragging, dragStart, startPos
 MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch then
@@ -60,7 +56,6 @@ UserInputService.TouchMoved:Connect(function(touch, gameProcessed)
     end
 end)
 
--- Title bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 44)
 TitleBar.BackgroundColor3 = BgSecondary
@@ -92,10 +87,6 @@ CloseBtn.Parent = TitleBar
 Instance.new("UICorner", CloseBtn).CornerRadius = UDim.new(0, 6)
 CloseBtn.MouseButton1Click:Connect(function()
     if farmConnection then farmConnection:Disconnect() end
-    TweenService:Create(MainFrame, TweenInfo.new(0.2, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-        Size = UDim2.new(0, 0, 0, 0), Position = UDim2.new(0.5, 0, 0.5, 0)
-    }):Play()
-    task.wait(0.25)
     ScreenGui:Destroy()
 end)
 
@@ -106,7 +97,6 @@ TitleSep.BackgroundColor3 = Green
 TitleSep.BorderSizePixel = 0
 TitleSep.Parent = MainFrame
 
--- Tab bar
 local TabFrame = Instance.new("Frame")
 TabFrame.Size = UDim2.new(1, -8, 0, 38)
 TabFrame.Position = UDim2.new(0, 4, 0, 50)
@@ -115,7 +105,6 @@ TabFrame.BorderSizePixel = 0
 TabFrame.Parent = MainFrame
 Instance.new("UICorner", TabFrame).CornerRadius = UDim.new(0, 8)
 
--- Content
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Size = UDim2.new(1, -8, 1, -96)
 ContentContainer.Position = UDim2.new(0, 4, 0, 92)
@@ -148,7 +137,7 @@ TabIndicator.Parent = MainFrame
 Instance.new("UICorner", TabIndicator).CornerRadius = UDim.new(0, 2)
 
 -- ============================================================================
--- UI HELPERS
+-- UI HELPERS (simplified, no dropdowns)
 -- ============================================================================
 local function ClearScroll()
     for _, v in ipairs(ScrollFrame:GetChildren()) do
@@ -164,7 +153,7 @@ local function UpdateCanvas()
             total = total + v.Size.Y.Offset + 4
         end
     end
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(total, 0))
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(total, ContentContainer.AbsoluteSize.Y))
 end
 
 local function AddSection(name)
@@ -199,8 +188,9 @@ local function AddToggle(name, default, callback)
     frame.BorderSizePixel = 0
     frame.Parent = ScrollFrame
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(0, 210, 1, 0)
+    label.Size = UDim2.new(0, 200, 1, 0)
     label.Position = UDim2.new(0, 10, 0, 0)
     label.BackgroundTransparency = 1
     label.Text = name
@@ -208,8 +198,8 @@ local function AddToggle(name, default, callback)
     label.TextSize = 12
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
-    label.TextTruncate = Enum.TextTruncate.AtEnd
     label.Parent = frame
+    
     local toggleBg = Instance.new("Frame")
     toggleBg.Size = UDim2.new(0, 40, 0, 20)
     toggleBg.Position = UDim2.new(1, -50, 0, 7)
@@ -217,6 +207,7 @@ local function AddToggle(name, default, callback)
     toggleBg.BorderSizePixel = 0
     toggleBg.Parent = frame
     Instance.new("UICorner", toggleBg).CornerRadius = UDim.new(1, 0)
+    
     local dot = Instance.new("Frame")
     dot.Size = UDim2.new(0, 14, 0, 14)
     dot.Position = default and UDim2.new(0, 23, 0, 3) or UDim2.new(0, 3, 0, 3)
@@ -224,6 +215,7 @@ local function AddToggle(name, default, callback)
     dot.BorderSizePixel = 0
     dot.Parent = toggleBg
     Instance.new("UICorner", dot).CornerRadius = UDim.new(1, 0)
+    
     local enabled = default
     local function setState(val)
         enabled = val
@@ -231,12 +223,14 @@ local function AddToggle(name, default, callback)
         TweenService:Create(dot, TweenInfo.new(0.2), {Position = val and UDim2.new(0, 23, 0, 3) or UDim2.new(0, 3, 0, 3)}):Play()
         callback(val)
     end
+    
     local toggleBtn = Instance.new("TextButton")
     toggleBtn.Size = UDim2.new(1, 0, 1, 0)
     toggleBtn.BackgroundTransparency = 1
     toggleBtn.Text = ""
     toggleBtn.Parent = toggleBg
     toggleBtn.MouseButton1Click:Connect(function() setState(not enabled) end)
+    
     UpdateCanvas()
     return {GetState = function() return enabled end, SetState = setState}
 end
@@ -285,6 +279,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
     frame.BorderSizePixel = 0
     frame.Parent = ScrollFrame
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -16, 0, 20)
     label.Position = UDim2.new(0, 8, 0, 4)
@@ -295,6 +290,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
+    
     local sliderBar = Instance.new("Frame")
     sliderBar.Size = UDim2.new(1, -16, 0, 6)
     sliderBar.Position = UDim2.new(0, 8, 0, 30)
@@ -302,6 +298,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
     sliderBar.BorderSizePixel = 0
     sliderBar.Parent = frame
     Instance.new("UICorner", sliderBar).CornerRadius = UDim.new(0, 3)
+    
     local sliderFill = Instance.new("Frame")
     local ratio = (default - min) / (max - min)
     sliderFill.Size = UDim2.new(ratio, 0, 1, 0)
@@ -309,6 +306,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
     sliderFill.BorderSizePixel = 0
     sliderFill.Parent = sliderBar
     Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 3)
+    
     local current = default
     local function setVal(val)
         current = math.clamp(val, min, max)
@@ -317,6 +315,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
         label.Text = name .. ": " .. current .. suffix
         callback(current)
     end
+    
     sliderBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
             local function track()
@@ -330,6 +329,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
             UserInputService.TouchEnded:Connect(function() conn:Disconnect() end)
         end
     end)
+    
     UpdateCanvas()
     return {GetValue = function() return current end, SetValue = setVal}
 end
@@ -341,6 +341,7 @@ local function AddTextbox(name, placeholder, callback)
     frame.BorderSizePixel = 0
     frame.Parent = ScrollFrame
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+    
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -16, 0, 16)
     label.Position = UDim2.new(0, 8, 0, 2)
@@ -351,6 +352,7 @@ local function AddTextbox(name, placeholder, callback)
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
+    
     local input = Instance.new("TextBox")
     input.Size = UDim2.new(1, -16, 0, 20)
     input.Position = UDim2.new(0, 8, 0, 16)
@@ -369,79 +371,15 @@ local function AddTextbox(name, placeholder, callback)
     return input
 end
 
-local function AddDropdown(name, options, default, callback)
-    AddLabel(name, Green)
-    local selected = default or options[1]
-    local currentLabel = AddLabel("  ➤ " .. selected, TextPrimary)
-    
-    local optionFrames = {}
-    for _, opt in ipairs(options) do
-        local optFrame = Instance.new("Frame")
-        optFrame.Size = UDim2.new(1, -8, 0, 28)
-        optFrame.BackgroundColor3 = opt == selected and GreenDark or BgElement
-        optFrame.BorderSizePixel = 0
-        optFrame.Visible = false
-        optFrame.Name = "DropdownOpt_" .. opt
-        optFrame.Parent = ScrollFrame
-        Instance.new("UICorner", optFrame).CornerRadius = UDim.new(0, 4)
-        
-        local optLabel = Instance.new("TextLabel")
-        optLabel.Size = UDim2.new(1, -20, 1, 0)
-        optLabel.Position = UDim2.new(0, 10, 0, 0)
-        optLabel.BackgroundTransparency = 1
-        optLabel.Text = "    " .. opt
-        optLabel.TextColor3 = opt == selected and Color3.fromRGB(255, 255, 255) or TextPrimary
-        optLabel.TextSize = 11
-        optLabel.Font = Enum.Font.Gotham
-        optLabel.TextXAlignment = Enum.TextXAlignment.Left
-        optLabel.Parent = optFrame
-        
-        local optBtn = Instance.new("TextButton")
-        optBtn.Size = UDim2.new(1, 0, 1, 0)
-        optBtn.BackgroundTransparency = 1
-        optBtn.Text = ""
-        optBtn.Parent = optFrame
-        optBtn.MouseButton1Click:Connect(function()
-            selected = opt
-            currentLabel.Text = "  ➤ " .. selected
-            for _, f in ipairs(optionFrames) do f.Visible = false end
-            for _, f in ipairs(optionFrames) do
-                local l = f:FindFirstChildOfClass("TextLabel")
-                if l then
-                    f.BackgroundColor3 = BgElement
-                    l.TextColor3 = TextPrimary
-                end
-            end
-            optFrame.BackgroundColor3 = GreenDark
-            optLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-            callback(selected)
-        end)
-        table.insert(optionFrames, optFrame)
-        UpdateCanvas()
-    end
-    
-    currentLabel.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            local anyVisible = false
-            for _, f in ipairs(optionFrames) do anyVisible = anyVisible or f.Visible end
-            for _, f in ipairs(optionFrames) do f.Visible = not anyVisible end
-        end
-    end)
-    
-    return {GetValue = function() return selected end}
-end
-
 -- ============================================================================
--- STATIC INTERACTION FUNCTIONS (NO TELEPORT)
+-- GAME LOGIC (static, no teleport)
 -- ============================================================================
-
--- Get all plants in workspace
 local function GetPlants()
     local plants = {}
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("Model") and obj.PrimaryPart then
             local name = obj.Name:lower()
-            if name:find("plant") or name:find("tree") or name:find("flower") or name:find("crop") or name:find("bush") then
+            if name:find("plant") or name:find("tree") or name:find("flower") or name:find("crop") then
                 table.insert(plants, obj)
             end
         end
@@ -449,14 +387,13 @@ local function GetPlants()
     return plants
 end
 
--- Check if plant has harvest-ready indicator
 local function IsPlantReady(plant)
     for _, child in ipairs(plant:GetDescendants()) do
         if child:IsA("BillboardGui") then
             for _, label in ipairs(child:GetDescendants()) do
                 if label:IsA("TextLabel") then
                     local text = label.Text:lower()
-                    if text:find("ready") or text:find("harvest") or text:find("0s") or text:find("0m") or text:find("ripe") then
+                    if text:find("ready") or text:find("harvest") or text:find("0s") or text:find("0m") then
                         return true
                     end
                 end
@@ -464,10 +401,9 @@ local function IsPlantReady(plant)
         end
         if child:IsA("BasePart") then
             local n = child.Name:lower()
-            if n:find("fruit") or n:find("produce") or n:find("harvestable") then return true end
+            if n:find("fruit") or n:find("produce") then return true end
             if child.BrickColor == BrickColor.new("Bright red") or 
-               child.BrickColor == BrickColor.new("Bright yellow") or
-               child.BrickColor == BrickColor.new("New Yeller") then
+               child.BrickColor == BrickColor.new("Bright yellow") then
                 return true
             end
         end
@@ -475,17 +411,13 @@ local function IsPlantReady(plant)
     return false
 end
 
--- Get plant weight from BillboardGui label
 local function GetPlantWeight(plant)
     for _, child in ipairs(plant:GetDescendants()) do
         if child:IsA("BillboardGui") then
             for _, label in ipairs(child:GetDescendants()) do
                 if label:IsA("TextLabel") then
-                    local text = label.Text
-                    local kg = text:match("(%d+%.?%d*)%s*kg")
+                    local kg = label.Text:match("(%d+%.?%d*)%s*kg")
                     if kg then return tonumber(kg) end
-                    local lbs = text:match("(%d+%.?%d*)%s*lbs")
-                    if lbs then return tonumber(lbs) * 0.453 end
                 end
             end
         end
@@ -505,19 +437,11 @@ local function IsBlacklisted(plant)
     return false
 end
 
--- Collect plant WITHOUT moving — fire interactions remotely
 local function CollectPlantStatic(plant)
-    -- Fire all ProximityPrompts and ClickDetectors on the plant
     for _, child in ipairs(plant:GetDescendants()) do
-        if child:IsA("ProximityPrompt") then
-            fireproximityprompt(child)
-        end
-        if child:IsA("ClickDetector") then
-            fireclickdetector(child)
-        end
+        if child:IsA("ProximityPrompt") then fireproximityprompt(child) end
+        if child:IsA("ClickDetector") then fireclickdetector(child) end
     end
-    
-    -- Try clicking on the plant's PrimaryPart via VirtualInputManager at its screen position
     if plant.PrimaryPart then
         local screenPos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(plant.PrimaryPart.Position)
         if onScreen then
@@ -526,52 +450,29 @@ local function CollectPlantStatic(plant)
             VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
         end
     end
-    
-    -- Fire touch interest between character and plant
     local char = Player.Character
     if char and char:FindFirstChild("HumanoidRootPart") and plant.PrimaryPart then
         firetouchinterest(char.HumanoidRootPart, plant.PrimaryPart, 0)
-        task.wait(0.05)
         firetouchinterest(char.HumanoidRootPart, plant.PrimaryPart, 1)
     end
-    
     return true
 end
 
--- Sell from inventory GUI — find sell buttons in PlayerGui
 local function SellFromInventory()
     local sold = false
-    
-    -- Scan all GUI elements for sell buttons
     for _, gui in ipairs(Player.PlayerGui:GetDescendants()) do
-        if gui:IsA("TextButton") then
-            local text = gui.Text:lower()
-            if text:find("sell") then
-                if text:find("all") or text:find("inventory") or text:find("items") or text == "sell" then
-                    firesignal(gui.MouseButton1Click or gui.Activated)
-                    sold = true
-                    task.wait(0.2)
-                end
-            end
-        end
-        if gui:IsA("ImageButton") then
-            if gui.Name:lower():find("sell") then
-                firesignal(gui.MouseButton1Click or gui.Activated)
-                sold = true
-                task.wait(0.2)
-            end
+        if gui:IsA("TextButton") and gui.Text:lower():find("sell") then
+            firesignal(gui.MouseButton1Click or gui.Activated)
+            sold = true
+            task.wait(0.2)
         end
     end
-    
-    -- Also try firing sell NPC prompts
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
-        if name:find("sell") or name:find("merchant") or name:find("vendor") then
+        if obj.Name:lower():find("sell") or obj.Name:lower():find("merchant") then
             for _, prompt in ipairs(obj:GetDescendants()) do
                 if prompt:IsA("ProximityPrompt") then
                     fireproximityprompt(prompt)
                     task.wait(0.3)
-                    -- After opening shop, try clicking sell buttons again
                     for _, gui in ipairs(Player.PlayerGui:GetDescendants()) do
                         if gui:IsA("TextButton") and gui.Text:lower():find("sell") then
                             firesignal(gui.MouseButton1Click or gui.Activated)
@@ -582,7 +483,6 @@ local function SellFromInventory()
             end
         end
     end
-    
     if sold then
         farmStats.sold = farmStats.sold + 1
         farmStats.earnings = farmStats.earnings + math.random(50, 500)
@@ -590,12 +490,9 @@ local function SellFromInventory()
     return sold
 end
 
--- Buy seeds from shop GUI
 local function BuySeedsFromShop(seedType)
-    -- Open shop via proximity prompt
     for _, obj in ipairs(Workspace:GetDescendants()) do
-        local name = obj.Name:lower()
-        if name:find("shop") or name:find("store") then
+        if obj.Name:lower():find("shop") or obj.Name:lower():find("store") then
             for _, prompt in ipairs(obj:GetDescendants()) do
                 if prompt:IsA("ProximityPrompt") then
                     fireproximityprompt(prompt)
@@ -604,13 +501,10 @@ local function BuySeedsFromShop(seedType)
             end
         end
     end
-    
-    -- Click seed purchase buttons in shop GUI
     for _, gui in ipairs(Player.PlayerGui:GetDescendants()) do
-        if gui:IsA("TextButton") or gui:IsA("ImageButton") then
-            local text = gui.Text:lower()
-            local seedLower = (seedType or ""):lower()
-            if text:find("seed") or text:find(seedLower) then
+        if gui:IsA("TextButton") then
+            local t = gui.Text:lower()
+            if t:find("seed") or t:find((seedType or ""):lower()) then
                 firesignal(gui.MouseButton1Click or gui.Activated)
                 task.wait(0.2)
                 return true
@@ -620,53 +514,43 @@ local function BuySeedsFromShop(seedType)
     return false
 end
 
--- Equip seed bag from backpack
 local function EquipSeedBag()
     local char = Player.Character
-    if not char then return false end
+    if not char then return nil end
     for _, tool in ipairs(Player.Backpack:GetChildren()) do
-        if tool:IsA("Tool") then
-            local n = tool.Name:lower()
-            if n:find("seed") or n:find("bag") or n:find("pouch") or n:find("planter") then
-                char.Humanoid:EquipTool(tool)
-                task.wait(0.3)
-                return tool
-            end
+        if tool:IsA("Tool") and (tool.Name:lower():find("seed") or tool.Name:lower():find("bag") or tool.Name:lower():find("pouch")) then
+            char.Humanoid:EquipTool(tool)
+            task.wait(0.3)
+            return tool
         end
     end
     return nil
 end
 
--- Equip watering tool
-local function EquipWateringTool()
+local function EquipWaterTool()
     local char = Player.Character
-    if not char then return false end
+    if not char then return nil end
     for _, tool in ipairs(Player.Backpack:GetChildren()) do
-        if tool:IsA("Tool") then
-            local n = tool.Name:lower()
-            if n:find("water") or n:find("sprinkler") or n:find("can") or n:find("hose") then
-                char.Humanoid:EquipTool(tool)
-                task.wait(0.3)
-                return tool
-            end
+        if tool:IsA("Tool") and (tool.Name:lower():find("water") or tool.Name:lower():find("sprinkler") or tool.Name:lower():find("can")) then
+            char.Humanoid:EquipTool(tool)
+            task.wait(0.3)
+            return tool
         end
     end
     return nil
 end
 
--- Get empty plots
 local function GetEmptyPlots()
     local plots = {}
     for _, obj in ipairs(Workspace:GetDescendants()) do
         if obj:IsA("BasePart") then
             local n = obj.Name:lower()
-            if n:find("plot") or n:find("soil") or n:find("dirt") or n:find("planter") or n:find("field") then
+            if n:find("plot") or n:find("soil") or n:find("dirt") or n:find("planter") then
                 local occupied = false
                 local region = Region3.new(obj.Position - Vector3.new(3, 2, 3), obj.Position + Vector3.new(3, 5, 3))
                 for _, item in ipairs(Workspace:FindPartsInRegion3(region, nil, 100)) do
                     if item.Parent and item.Parent:IsA("Model") then
-                        local pn = item.Parent.Name:lower()
-                        if pn:find("plant") or pn:find("tree") or pn:find("flower") then
+                        if item.Parent.Name:lower():find("plant") or item.Parent.Name:lower():find("tree") then
                             occupied = true
                             break
                         end
@@ -679,33 +563,25 @@ local function GetEmptyPlots()
     return plots
 end
 
--- Plant at plot WITHOUT moving — use tool activation + screen click
-local function PlantAtPlotStatic(plot)
+local function PlantAtPlot(plot)
     local tool = EquipSeedBag()
     if not tool then return false end
-    
-    -- Get plot screen position
     local screenPos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(plot.Position)
     if onScreen then
-        -- Tap the plot
         VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
         task.wait(0.05)
         VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
         task.wait(0.2)
-        -- Activate tool
         tool:Activate()
-        task.wait(0.2)
         farmStats.planted = farmStats.planted + 1
         return true
     end
     return false
 end
 
--- Water at plot WITHOUT moving
-local function WaterAtPlotStatic(plot)
-    local tool = EquipWateringTool()
+local function WaterAtPlot(plot)
+    local tool = EquipWaterTool()
     if not tool then return false end
-    
     local screenPos, onScreen = Workspace.CurrentCamera:WorldToViewportPoint(plot.Position)
     if onScreen then
         VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, true, game, 1)
@@ -713,32 +589,25 @@ local function WaterAtPlotStatic(plot)
         VirtualInputManager:SendMouseButtonEvent(screenPos.X, screenPos.Y, 0, false, game, 1)
         task.wait(0.2)
         tool:Activate()
-        task.wait(0.2)
         farmStats.watered = farmStats.watered + 1
         return true
     end
     return false
 end
 
--- ============================================================================
--- MAIN FARM LOOP (STATIC)
--- ============================================================================
+-- Farm loop
 local function StartFarmLoop()
     if farmConnection then farmConnection:Disconnect() end
-    
     farmConnection = RunService.Heartbeat:Connect(function()
         if not _G.MasterAutofarm then return end
         
-        -- Auto Collect (static — fires prompts/clickdetectors)
         if _G.AutoCollect then
             local plants = GetPlants()
             for _, plant in ipairs(plants) do
                 if IsPlantReady(plant) and not IsBlacklisted(plant) then
-                    if _G.CollectFilter == "All Plants" or
-                       (_G.CollectFilter == "Ready Only" and IsPlantReady(plant)) then
-                        if CollectPlantStatic(plant) then
-                            farmStats.collected = farmStats.collected + 1
-                        end
+                    if _G.CollectFilter == "All Plants" or (_G.CollectFilter == "Ready Only" and IsPlantReady(plant)) then
+                        CollectPlantStatic(plant)
+                        farmStats.collected = farmStats.collected + 1
                         break
                     end
                 end
@@ -746,63 +615,48 @@ local function StartFarmLoop()
             task.wait((_G.CollectDelay or 500) / 1000)
         end
         
-        -- Auto Sell (from inventory GUI)
         if _G.AutoSell then
             local shouldSell = true
-            if _G.SellWhenFull then
-                shouldSell = farmStats.collected >= (_G.SellFullThreshold or 10)
-            end
+            if _G.SellWhenFull then shouldSell = farmStats.collected >= (_G.SellFullThreshold or 10) end
             if shouldSell and farmStats.collected > 0 then
-                if SellFromInventory() then
-                    farmStats.collected = 0
-                end
+                if SellFromInventory() then farmStats.collected = 0 end
             end
             task.wait((_G.SellDelay or 1000) / 1000)
         end
         
-        -- Auto Buy Seeds (shop GUI)
         if _G.AutoBuySeeds then
             BuySeedsFromShop(_G.SeedType or "Best Profit")
             task.wait(2)
         end
         
-        -- Auto Plant (static — tool activate + screen click)
         if _G.AutoPlant then
             local plots = GetEmptyPlots()
             if #plots > 0 then
                 local idx = 1
-                if _G.PlantPattern == "Random Plot" then
-                    idx = math.random(1, #plots)
-                elseif _G.PlantPattern == "Sequential" then
-                    idx = (farmStats.planted % #plots) + 1
-                end
-                PlantAtPlotStatic(plots[idx])
+                if _G.PlantPattern == "Random Plot" then idx = math.random(1, #plots)
+                elseif _G.PlantPattern == "Sequential" then idx = (farmStats.planted % #plots) + 1 end
+                PlantAtPlot(plots[idx])
             end
             task.wait(1.5)
         end
         
-        -- Auto Water (static — watering tool + screen click)
         if _G.AutoWater then
-            local plots = GetEmptyPlots()
             local allPlots = {}
             for _, obj in ipairs(Workspace:GetDescendants()) do
                 if obj:IsA("BasePart") then
                     local n = obj.Name:lower()
-                    if n:find("plot") or n:find("soil") or n:find("dirt") then
-                        table.insert(allPlots, obj)
-                    end
+                    if n:find("plot") or n:find("soil") or n:find("dirt") then table.insert(allPlots, obj) end
                 end
             end
             if #allPlots > 0 then
                 waterPlotIndex = (waterPlotIndex % #allPlots) + 1
-                WaterAtPlotStatic(allPlots[waterPlotIndex])
+                WaterAtPlot(allPlots[waterPlotIndex])
             end
             task.wait(3)
         end
         
-        -- Update status
         if statusLabel then
-            statusLabel.Text = string.format("  📊 Collected: %d | Sold: %d | 💰: %d | 🌱: %d | 💧: %d",
+            statusLabel.Text = string.format("  Collected:%d Sold:%d 💰:%d 🌱:%d 💧:%d",
                 farmStats.collected, farmStats.sold, farmStats.earnings, farmStats.planted, farmStats.watered)
         end
     end)
@@ -815,55 +669,76 @@ end
 -- ============================================================================
 -- BUILD TABS
 -- ============================================================================
-local tabs = {"🌱 Autofarm", "🛒 Auto Buy", "🔧 Misc", "🎁 Gifting", "⚙️ Config"}
+local tabs = {"Autofarm", "Auto Buy", "Misc", "Gifting", "Config"}
 local currentTab = nil
 local tabButtons = {}
 
 local function BuildTab(tabName)
     ClearScroll()
-    local cleanName = tabName:gsub("[%p%s%a]* ", "")
-
-    if cleanName == "Autofarm" then
-        AddSection("🎯 Auto Collect (Static)")
+    
+    if tabName == "Autofarm" then
+        AddSection("Auto Collect (Static)")
         AddToggle("Auto Collect Plants", false, function(v) _G.AutoCollect = v end)
         AddSlider("Collect Delay (ms)", 100, 5000, 500, "ms", function(v) _G.CollectDelay = v end)
-        AddDropdown("Collect Filter", {"All Plants", "Ready Only"}, "All Plants", function(v) _G.CollectFilter = v end)
         
-        AddSection("⚫ Blacklist (Weight)")
+        -- Cycle button for filter
+        _G.CollectFilter = _G.CollectFilter or "All Plants"
+        local filterLabel = AddLabel("Filter: " .. (_G.CollectFilter or "All Plants"), Green)
+        AddButton("Switch Filter (All/Ready)", function()
+            if _G.CollectFilter == "All Plants" then _G.CollectFilter = "Ready Only"
+            else _G.CollectFilter = "All Plants" end
+            filterLabel.Text = "Filter: " .. _G.CollectFilter
+        end)
+        
+        AddSection("Blacklist (Weight)")
         AddToggle("Blacklist Below KG", false, function(v) _G.BlacklistBelow = v end)
         AddSlider("Below (kg)", 1, 1000, 10, "kg", function(v) _G.BlacklistBelowValue = v end)
         AddToggle("Blacklist Above KG", false, function(v) _G.BlacklistAbove = v end)
         AddSlider("Above (kg)", 1, 10000, 500, "kg", function(v) _G.BlacklistAboveValue = v end)
-        AddButton("🔄 Apply Blacklist", function()
+        AddButton("Apply Blacklist", function()
             blacklist = {}
             if _G.BlacklistBelow then table.insert(blacklist, {type = "below", value = _G.BlacklistBelowValue or 10}) end
             if _G.BlacklistAbove then table.insert(blacklist, {type = "above", value = _G.BlacklistAboveValue or 500}) end
         end)
         
-        AddSection("💰 Auto Sell (Inventory)")
+        AddSection("Auto Sell (Inventory)")
         AddToggle("Auto Sell", false, function(v) _G.AutoSell = v end)
         AddSlider("Sell Delay (ms)", 100, 5000, 1000, "ms", function(v) _G.SellDelay = v end)
         AddToggle("Sell Only When Full", false, function(v) _G.SellWhenFull = v end)
         AddSlider("Full Threshold", 5, 50, 10, " plants", function(v) _G.SellFullThreshold = v end)
         
-        AddSection("🛒 Auto Buy Seeds (Shop)")
+        AddSection("Auto Buy Seeds (Shop)")
         AddToggle("Auto Buy Seeds", false, function(v) _G.AutoBuySeeds = v end)
-        AddDropdown("Seed Type", {"Best Profit", "Cheapest", "Fastest Grow", "Random"}, "Best Profit", function(v) _G.SeedType = v end)
+        _G.SeedType = _G.SeedType or "Best Profit"
+        local seedLabel = AddLabel("Seed: " .. (_G.SeedType or "Best Profit"), Green)
+        AddButton("Switch Seed Type", function()
+            local types = {"Best Profit", "Cheapest", "Fastest Grow", "Random"}
+            local current = table.find(types, _G.SeedType) or 1
+            _G.SeedType = types[current % #types + 1]
+            seedLabel.Text = "Seed: " .. _G.SeedType
+        end)
         AddSlider("Buy Amount", 1, 50, 5, " seeds", function(v) _G.BuyAmount = v end)
         
-        AddSection("🌱 Auto Plant (Static)")
+        AddSection("Auto Plant (Static)")
         AddToggle("Auto Plant Seeds", false, function(v) _G.AutoPlant = v end)
-        AddDropdown("Pattern", {"First Available", "Random Plot", "Sequential"}, "First Available", function(v) _G.PlantPattern = v end)
+        _G.PlantPattern = _G.PlantPattern or "First Available"
+        local patternLabel = AddLabel("Pattern: " .. (_G.PlantPattern or "First Available"), Green)
+        AddButton("Switch Pattern", function()
+            local patterns = {"First Available", "Random Plot", "Sequential"}
+            local current = table.find(patterns, _G.PlantPattern) or 1
+            _G.PlantPattern = patterns[current % #patterns + 1]
+            patternLabel.Text = "Pattern: " .. _G.PlantPattern
+        end)
         
-        AddSection("💧 Auto Water (Static)")
+        AddSection("Auto Water (Static)")
         AddToggle("Auto Water", false, function(v) _G.AutoWater = v end)
         
-        AddSection("🎮 Master")
-        AddToggle("▶ Enable Full Autofarm", false, function(v)
+        AddSection("Master Controls")
+        AddToggle("Enable Full Autofarm", false, function(v)
             _G.MasterAutofarm = v
             if v then StartFarmLoop() else StopFarmLoop() end
         end)
-        AddButton("⚡ Force Collect One", function()
+        AddButton("Force Collect One", function()
             local plants = GetPlants()
             for _, p in ipairs(plants) do
                 if IsPlantReady(p) and not IsBlacklisted(p) then
@@ -873,25 +748,25 @@ local function BuildTab(tabName)
                 end
             end
         end)
-        AddButton("⚡ Force Sell", function() SellFromInventory() end)
-        AddButton("⏹ Stop All", function() StopFarmLoop() _G.MasterAutofarm = false end)
+        AddButton("Force Sell Now", function() SellFromInventory() end)
+        AddButton("Stop All Farms", function() StopFarmLoop() _G.MasterAutofarm = false end)
         
-        AddSection("📊 Live Stats")
-        statusLabel = AddLabel("  📊 Ready. Enable Autofarm.", Green)
-
-    elseif cleanName == "Auto Buy" then
-        AddSection("🛒 Shop Auto Buy")
+        AddSection("Live Stats")
+        statusLabel = AddLabel("Ready. Enable Autofarm.", Green)
+    
+    elseif tabName == "Auto Buy" then
+        AddSection("Shop Auto Buyer")
         AddToggle("Enable Auto Buy", false, function(v) _G.AutoBuyEnabled = v end)
         for i = 1, 5 do
-            AddSection("Slot #" .. i)
+            AddSection("Slot " .. i)
             AddToggle("Enable", false, function(v) _G["BuySlot"..i.."Enabled"] = v end)
             AddTextbox("Item Name", "e.g. Golden Seed", function(v) _G["BuySlot"..i.."Item"] = v end)
             AddSlider("Max Price", 1, 1000000, 1000, " coins", function(v) _G["BuySlot"..i.."MaxPrice"] = v end)
-            AddSlider("Qty", 1, 999, 10, "x", function(v) _G["BuySlot"..i.."Quantity"] = v end)
+            AddSlider("Quantity", 1, 999, 10, "x", function(v) _G["BuySlot"..i.."Quantity"] = v end)
         end
-
-    elseif cleanName == "Misc" then
-        AddSection("🏃 Character")
+    
+    elseif tabName == "Misc" then
+        AddSection("Character")
         AddToggle("NoClip", false, function(v) _G.NoClip = v end)
         AddToggle("Infinite Jump", false, function(v) _G.InfJump = v end)
         AddSlider("WalkSpeed", 16, 200, 16, " studs", function(v)
@@ -900,18 +775,18 @@ local function BuildTab(tabName)
         AddSlider("JumpPower", 50, 500, 50, " studs", function(v)
             local c = Player.Character if c and c:FindFirstChild("Humanoid") then c.Humanoid.JumpPower = v end
         end)
-        AddSection("⚡ Performance")
+        AddSection("Performance")
         AddToggle("Hide Plants (Visual)", false, function(v) _G.HidePlants = v end)
         AddToggle("Low Graphics", false, function(v)
             game.Lighting.GlobalShadows = not v
             game.Lighting.FogEnd = v and 100 or 5000
         end)
-        AddSection("🔄 Auto Rebirth")
+        AddSection("Auto Rebirth")
         AddToggle("Auto Rebirth", false, function(v) _G.AutoRebirth = v end)
         AddSlider("Rebirth at", 1000, 10000000, 100000, " coins", function(v) _G.RebirthThreshold = v end)
-
-    elseif cleanName == "Gifting" then
-        AddSection("🎁 Mail Gifting")
+    
+    elseif tabName == "Gifting" then
+        AddSection("Mail Gifting")
         AddToggle("Enable Auto Gifting", false, function(v) _G.GiftingEnabled = v end)
         AddTextbox("Recipient", "Username...", function(v) _G.GiftRecipient = v end)
         AddToggle("Gift All Friends", false, function(v) _G.GiftAllFriends = v end)
@@ -919,27 +794,23 @@ local function BuildTab(tabName)
         AddSlider("Per Mail", 1, 999, 20, "x", function(v) _G.GiftAmountPerMail = v end)
         AddSlider("Mail Count", 1, 1000, 50, " mails", function(v) _G.GiftMailCount = v end)
         AddSlider("Delay", 100, 10000, 2000, "ms", function(v) _G.GiftDelay = v end)
-        AddSection("🔓 Bypass")
+        AddSection("Bypass")
         AddToggle("Bypass 20x Limit", false, function(v) _G.GiftBypass = v end)
-        AddSection("🛡️ Anti-Ban")
+        AddSection("Anti-Ban")
         AddToggle("Random Delay", true, function(v) _G.GiftRandomDelay = v end)
-        AddButton("▶ Start", function() _G.GiftingEnabled = true end)
-        AddButton("⏹ Stop", function() _G.GiftingEnabled = false end)
-
-    elseif cleanName == "Config" then
-        AddSection("ℹ️ About")
-        AddLabel("🌱 LEBXIA HUB • Garden 2", Green)
-        AddLabel("📱 v7.0 • Static Autofarm", TextSecondary)
-        AddLabel("✅ No teleport • Inventory based", TextSecondary)
+        AddButton("Start Gifting", function() _G.GiftingEnabled = true end)
+        AddButton("Stop Gifting", function() _G.GiftingEnabled = false end)
+    
+    elseif tabName == "Config" then
+        AddSection("About")
+        AddLabel("LEBXIA HUB • Garden 2", Green)
+        AddLabel("v7.1 • Static Autofarm", TextSecondary)
+        AddLabel("No teleport • Inventory based", TextSecondary)
         AddSection("Controls")
-        AddButton("🔄 Refresh UI", function() BuildTab(currentTab) end)
-        AddButton("⏹ Stop All", function() StopFarmLoop() _G.MasterAutofarm = false end)
-        AddButton("❌ Close", function()
+        AddButton("Refresh UI", function() BuildTab(currentTab) end)
+        AddButton("Stop All", function() StopFarmLoop() _G.MasterAutofarm = false end)
+        AddButton("Close", function()
             StopFarmLoop()
-            TweenService:Create(MainFrame, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.In), {
-                Size = UDim2.new(0, 0, 0, 0)
-            }):Play()
-            task.wait(0.3)
             ScreenGui:Destroy()
         end)
     end
@@ -971,24 +842,13 @@ for i, tabName in ipairs(tabs) do
         TweenService:Create(TabIndicator, TweenInfo.new(0.25, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Position = UDim2.new(0, (i - 1) * 70 + 6, 0, 88)
         }):Play()
-        TweenService:Create(ContentContainer, TweenInfo.new(0.15), {BackgroundTransparency = 0.8}):Play()
-        task.wait(0.15)
         currentTab = tabName
         BuildTab(tabName)
-        TweenService:Create(ContentContainer, TweenInfo.new(0.2), {BackgroundTransparency = 0}):Play()
     end)
 end
 
 currentTab = tabs[1]
 BuildTab(currentTab)
-
--- Entrance
-MainFrame.Size = UDim2.new(0, 0, 0, 0)
-MainFrame.Position = UDim2.new(0.5, 0, 0.5, 0)
-TweenService:Create(MainFrame, TweenInfo.new(0.4, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-    Size = UDim2.new(0, 360, 0, 520),
-    Position = UDim2.new(0.5, -180, 0.5, -260)
-}):Play()
 
 -- Background loops
 spawn(function()
@@ -1023,6 +883,6 @@ end)
 
 game.StarterGui:SetCore("SendNotification", {
     Title = "LEBXIA • Garden 2",
-    Text = "v7.0 • Static Autofarm • No Movement",
+    Text = "v7.1 Loaded • Static Autofarm",
     Duration = 4,
 })
