@@ -1,5 +1,5 @@
--- // LEBXIA HUB • Grow a Garden 2 • Mobile v8.0
--- // Full mail bypass • Inventory calculator • Webhook logs • Auto trade
+-- // LEBXIA HUB • Grow a Garden 2 • Mobile v8.5
+-- // Hardcoded Item Database • Fixed Sliders • Categorized Gift Selection
 
 local Players = game:GetService("Players")
 local Player = Players.LocalPlayer
@@ -10,8 +10,58 @@ local RunService = game:GetService("RunService")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Workspace = game:GetService("Workspace")
 local HttpService = game:GetService("HttpService")
-local TeleportService = game:GetService("TeleportService")
 
+-- ============================================================================
+-- ITEM DATABASE (Hardcoded for Grow a Garden 2)
+-- ============================================================================
+local ItemDB = {
+    Seeds = {
+        "Basic Seed", "Common Seed", "Uncommon Seed", "Rare Seed",
+        "Epic Seed", "Legendary Seed", "Mythic Seed", "Golden Seed",
+        "Diamond Seed", "Crystal Seed", "Magic Seed", "Enchanted Seed",
+        "Mystery Seed", "Lucky Seed", "Premium Seed", "Exotic Seed",
+        "Tropical Seed", "Desert Seed", "Ocean Seed", "Forest Seed",
+        "Fire Seed", "Ice Seed", "Electric Seed", "Dark Seed",
+        "Light Seed", "Nature Seed", "Rainbow Seed", "Galaxy Seed",
+        "Sunflower Seed", "Rose Seed", "Tulip Seed", "Daisy Seed",
+        "Lily Seed", "Orchid Seed", "Cactus Seed", "Bamboo Seed",
+        "Pumpkin Seed", "Watermelon Seed", "Strawberry Seed", "Blueberry Seed",
+        "Apple Seed", "Orange Seed", "Banana Seed", "Cherry Seed",
+        "Grape Seed", "Lemon Seed", "Coconut Seed", "Mango Seed",
+        "Peach Seed", "Pear Seed", "Plum Seed", "Kiwi Seed"
+    },
+    Fruits = {
+        "Apple", "Golden Apple", "Banana", "Orange", "Cherry",
+        "Strawberry", "Blueberry", "Watermelon", "Pumpkin", "Grape",
+        "Lemon", "Lime", "Coconut", "Mango", "Peach",
+        "Pear", "Plum", "Kiwi", "Pineapple", "Dragon Fruit",
+        "Star Fruit", "Passion Fruit", "Pomegranate", "Lychee", "Guava",
+        "Sunflower", "Rose", "Tulip", "Daisy", "Lily",
+        "Orchid", "Cactus Flower", "Lotus", "Jasmine", "Lavender",
+        "Basic Flower", "Rare Flower", "Epic Flower", "Legendary Flower",
+        "Golden Flower", "Rainbow Flower", "Mystic Bloom", "Crystal Rose",
+        "Tomato", "Carrot", "Potato", "Corn", "Wheat",
+        "Cabbage", "Lettuce", "Broccoli", "Cucumber", "Pepper",
+        "Onion", "Garlic", "Mushroom", "Truffle", "Ginger"
+    },
+    Gears = {
+        "Watering Can", "Basic Watering Can", "Premium Watering Can",
+        "Golden Watering Can", "Sprinkler", "Basic Sprinkler",
+        "Premium Sprinkler", "Auto Sprinkler", "Fertilizer",
+        "Basic Fertilizer", "Premium Fertilizer", "Speed-Gro",
+        "Super Fertilizer", "Magic Fertilizer", "Compost",
+        "Shovel", "Golden Shovel", "Hoe", "Golden Hoe",
+        "Trowel", "Rake", "Shears", "Harvesting Basket",
+        "Seed Bag", "Plant Pot", "Soil Bag", "Mulch",
+        "Growth Booster", "Plant Food", "Pesticide", "Weed Killer",
+        "Garden Gnome", "Scarecrow", "Greenhouse Key",
+        "Expansion Permit", "Land Deed", "Storage Crate",
+        "Basic Gift Box", "Premium Gift Box", "Mystery Box",
+        "Lucky Chest", "Treasure Chest", "Seed Packet"
+    }
+}
+
+-- Colors
 local Green = Color3.fromRGB(80, 220, 100)
 local GreenDark = Color3.fromRGB(50, 150, 65)
 local BgMain = Color3.fromRGB(18, 22, 18)
@@ -20,7 +70,9 @@ local BgElement = Color3.fromRGB(30, 38, 30)
 local TextPrimary = Color3.fromRGB(220, 240, 220)
 local TextSecondary = Color3.fromRGB(160, 180, 160)
 local AccentGold = Color3.fromRGB(255, 200, 60)
+local AccentBlue = Color3.fromRGB(100, 200, 255)
 
+-- State
 local farmConnection = nil
 local giftConnection = nil
 local farmStats = {collected = 0, sold = 0, earnings = 0, planted = 0, watered = 0}
@@ -32,6 +84,11 @@ local waterPlotIndex = 1
 local tradeLogs = {}
 local multiplierCache = 1.0
 
+-- Selected gift item
+local selectedGiftItem = ItemDB.Seeds[1]
+local selectedGiftCategory = "Seeds"
+
+-- GUI
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "LebxiaHub"
 ScreenGui.ResetOnSpawn = false
@@ -46,6 +103,7 @@ MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 Instance.new("UICorner", MainFrame).CornerRadius = UDim.new(0, 10)
 
+-- Draggable
 local dragging, dragStart, startPos
 MainFrame.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch then
@@ -64,6 +122,7 @@ UserInputService.TouchMoved:Connect(function(touch, gameProcessed)
     end
 end)
 
+-- Title bar
 local TitleBar = Instance.new("Frame")
 TitleBar.Size = UDim2.new(1, 0, 0, 44)
 TitleBar.BackgroundColor3 = BgSecondary
@@ -106,6 +165,7 @@ TitleSep.BackgroundColor3 = Green
 TitleSep.BorderSizePixel = 0
 TitleSep.Parent = MainFrame
 
+-- Tab bar
 local TabFrame = Instance.new("Frame")
 TabFrame.Size = UDim2.new(1, -8, 0, 38)
 TabFrame.Position = UDim2.new(0, 4, 0, 50)
@@ -114,6 +174,7 @@ TabFrame.BorderSizePixel = 0
 TabFrame.Parent = MainFrame
 Instance.new("UICorner", TabFrame).CornerRadius = UDim.new(0, 8)
 
+-- Content
 local ContentContainer = Instance.new("Frame")
 ContentContainer.Size = UDim2.new(1, -8, 1, -96)
 ContentContainer.Position = UDim2.new(0, 4, 0, 92)
@@ -275,6 +336,7 @@ local function AddLabel(text, color)
     return label
 end
 
+-- FIXED SLIDER - uses direct touch position tracking
 local function AddSlider(name, min, max, default, suffix, callback)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -8, 0, 55)
@@ -282,6 +344,7 @@ local function AddSlider(name, min, max, default, suffix, callback)
     frame.BorderSizePixel = 0
     frame.Parent = ScrollFrame
     Instance.new("UICorner", frame).CornerRadius = UDim.new(0, 6)
+
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, -16, 0, 20)
     label.Position = UDim2.new(0, 8, 0, 4)
@@ -292,41 +355,102 @@ local function AddSlider(name, min, max, default, suffix, callback)
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.Parent = frame
-    local sliderBar = Instance.new("Frame")
-    sliderBar.Size = UDim2.new(1, -16, 0, 6)
-    sliderBar.Position = UDim2.new(0, 8, 0, 30)
+
+    local sliderBar = Instance.new("TextButton")
+    sliderBar.Size = UDim2.new(1, -16, 0, 22)
+    sliderBar.Position = UDim2.new(0, 8, 0, 28)
     sliderBar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
     sliderBar.BorderSizePixel = 0
+    sliderBar.Text = ""
+    sliderBar.AutoButtonColor = false
     sliderBar.Parent = frame
-    Instance.new("UICorner", sliderBar).CornerRadius = UDim.new(0, 3)
+    Instance.new("UICorner", sliderBar).CornerRadius = UDim.new(0, 4)
+
     local sliderFill = Instance.new("Frame")
     local ratio = (default - min) / (max - min)
     sliderFill.Size = UDim2.new(ratio, 0, 1, 0)
     sliderFill.BackgroundColor3 = Green
     sliderFill.BorderSizePixel = 0
+    sliderFill.Active = false
     sliderFill.Parent = sliderBar
-    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 3)
+    Instance.new("UICorner", sliderFill).CornerRadius = UDim.new(0, 4)
+
+    local knob = Instance.new("Frame")
+    knob.Size = UDim2.new(0, 22, 0, 22)
+    knob.Position = UDim2.new(ratio, -11, 0, 0)
+    knob.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    knob.BorderSizePixel = 0
+    knob.Parent = sliderBar
+    Instance.new("UICorner", knob).CornerRadius = UDim.new(1, 0)
+
     local current = default
+    local isDragging = false
+
     local function setVal(val)
-        current = math.clamp(val, min, max)
+        current = math.clamp(math.floor(val), min, max)
         local r = (current - min) / (max - min)
-        TweenService:Create(sliderFill, TweenInfo.new(0.15), {Size = UDim2.new(r, 0, 1, 0)}):Play()
+        TweenService:Create(sliderFill, TweenInfo.new(0.1), {Size = UDim2.new(r, 0, 1, 0)}):Play()
+        TweenService:Create(knob, TweenInfo.new(0.1), {Position = UDim2.new(r, -11, 0, 0)}):Play()
         label.Text = name .. ": " .. current .. suffix
         callback(current)
     end
+
+    local function updateFromTouch(touchPos)
+        local relX = touchPos.X - sliderBar.AbsolutePosition.X
+        local ratio2 = math.clamp(relX / sliderBar.AbsoluteSize.X, 0, 1)
+        setVal(min + ratio2 * (max - min))
+    end
+
     sliderBar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.Touch then
-            local function track()
-                local pos = UserInputService:GetTouchPosition()
-                local relX = pos.X - sliderBar.AbsolutePosition.X
-                local ratio2 = math.clamp(relX / sliderBar.AbsoluteSize.X, 0, 1)
-                setVal(math.floor(min + ratio2 * (max - min)))
-            end
-            track()
-            local conn = UserInputService.TouchMoved:Connect(function() track() end)
-            UserInputService.TouchEnded:Connect(function() conn:Disconnect() end)
+            isDragging = true
+            updateFromTouch(input.Position)
         end
     end)
+
+    sliderBar.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Touch then
+            isDragging = false
+        end
+    end)
+
+    UserInputService.TouchMoved:Connect(function(touch, processed)
+        if isDragging then
+            updateFromTouch(touch.Position)
+        end
+    end)
+
+    -- Plus/Minus buttons for precise control
+    local minusBtn = Instance.new("TextButton")
+    minusBtn.Size = UDim2.new(0, 18, 0, 18)
+    minusBtn.Position = UDim2.new(0, 8, 0, 28)
+    minusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    minusBtn.Text = "-"
+    minusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    minusBtn.TextSize = 14
+    minusBtn.Font = Enum.Font.GothamBold
+    minusBtn.BorderSizePixel = 0
+    minusBtn.Parent = frame
+    Instance.new("UICorner", minusBtn).CornerRadius = UDim.new(0, 4)
+    minusBtn.MouseButton1Click:Connect(function()
+        setVal(current - ((max - min) / 20))
+    end)
+
+    local plusBtn = Instance.new("TextButton")
+    plusBtn.Size = UDim2.new(0, 18, 0, 18)
+    plusBtn.Position = UDim2.new(1, -26, 0, 28)
+    plusBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
+    plusBtn.Text = "+"
+    plusBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    plusBtn.TextSize = 14
+    plusBtn.Font = Enum.Font.GothamBold
+    plusBtn.BorderSizePixel = 0
+    plusBtn.Parent = frame
+    Instance.new("UICorner", plusBtn).CornerRadius = UDim.new(0, 4)
+    plusBtn.MouseButton1Click:Connect(function()
+        setVal(current + ((max - min) / 20))
+    end)
+
     UpdateCanvas()
     return {GetValue = function() return current end, SetValue = setVal}
 end
@@ -373,21 +497,15 @@ local function CalculateInventory()
     local inventory = {}
     local totalBaseValue = 0
     local totalMultipliedValue = 0
-    
-    -- Scan backpack and character for fruit/plant items
+
     local function scanContainer(container)
         for _, item in ipairs(container:GetChildren()) do
             if item:IsA("Tool") then
                 local name = item.Name
                 local value = 0
-                
-                -- Try to get value from item attributes
-                if item:FindFirstChild("Value") then
-                    value = item.Value.Value
-                elseif item:FindFirstChild("Price") then
-                    value = item.Price.Value
+                if item:FindFirstChild("Value") then value = item.Value.Value
+                elseif item:FindFirstChild("Price") then value = item.Price.Value
                 else
-                    -- Estimate from name
                     local n = name:lower()
                     if n:find("golden") then value = 5000
                     elseif n:find("mythic") or n:find("legendary") then value = 3000
@@ -396,32 +514,27 @@ local function CalculateInventory()
                     elseif n:find("uncommon") then value = 200
                     else value = 50 end
                 end
-                
                 local multiplied = value * multiplierCache
                 totalBaseValue = totalBaseValue + value
                 totalMultipliedValue = totalMultipliedValue + multiplied
-                
-                if not inventory[name] then
-                    inventory[name] = {count = 0, baseValue = value, totalBase = 0, totalMultiplied = 0}
-                end
+                if not inventory[name] then inventory[name] = {count = 0, baseValue = value, totalBase = 0, totalMultiplied = 0} end
                 inventory[name].count = inventory[name].count + 1
                 inventory[name].totalBase = inventory[name].totalBase + value
                 inventory[name].totalMultiplied = inventory[name].totalMultiplied + multiplied
             end
         end
     end
-    
+
     scanContainer(Player.Backpack)
     if Player.Character then scanContainer(Player.Character) end
-    
-    -- Scan player GUI for inventory display
+
     for _, gui in ipairs(Player.PlayerGui:GetDescendants()) do
         if gui:IsA("TextLabel") and gui.Text:lower():find("multiplier") then
             local mult = gui.Text:match("(%d+%.?%d*)x")
             if mult then multiplierCache = tonumber(mult) end
         end
     end
-    
+
     return inventory, totalBaseValue, totalMultipliedValue
 end
 
@@ -434,12 +547,14 @@ local function GetMailGui()
             return gui
         end
     end
-    -- Search deeper
     for _, gui in ipairs(Player.PlayerGui:GetDescendants()) do
         if gui:IsA("ScreenGui") or gui:IsA("Frame") then
             for _, child in ipairs(gui:GetDescendants()) do
-                if child:IsA("TextBox") and child.PlaceholderText:lower():find("recipient") then
-                    return gui
+                if child:IsA("TextBox") then
+                    local ph = child.PlaceholderText:lower()
+                    if ph:find("recipient") or ph:find("player") or ph:find("username") then
+                        return gui
+                    end
                 end
             end
         end
@@ -450,14 +565,13 @@ end
 local function FindMailInputs(mailGui)
     local inputs = {recipient = nil, amount = nil, item = nil, sendBtn = nil}
     if not mailGui then return inputs end
-    
     for _, child in ipairs(mailGui:GetDescendants()) do
         if child:IsA("TextBox") then
             local ph = child.PlaceholderText:lower()
             local nm = child.Name:lower()
-            if ph:find("recipient") or ph:find("player") or ph:find("username") or nm:find("recipient") then
+            if ph:find("recipient") or ph:find("player") or ph:find("username") or nm:find("recipient") or nm:find("player") then
                 inputs.recipient = child
-            elseif ph:find("amount") or ph:find("quantity") or nm:find("amount") then
+            elseif ph:find("amount") or ph:find("quantity") or nm:find("amount") or nm:find("quantity") then
                 inputs.amount = child
             elseif ph:find("item") or nm:find("item") then
                 inputs.item = child
@@ -465,7 +579,7 @@ local function FindMailInputs(mailGui)
         end
         if child:IsA("TextButton") then
             local t = child.Text:lower()
-            if t:find("send") or t:find("mail") or t:find("gift") or t:find("submit") then
+            if t:find("send") or t:find("mail") or t:find("gift") or t:find("submit") or t:find("confirm") then
                 inputs.sendBtn = child
             end
         end
@@ -476,7 +590,6 @@ end
 local function SendMail(recipient, itemName, amount)
     local mailGui = GetMailGui()
     if not mailGui then
-        -- Try opening mail via proximity
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj.Name:lower():find("mail") or obj.Name:lower():find("post") then
                 for _, prompt in ipairs(obj:GetDescendants()) do
@@ -489,30 +602,12 @@ local function SendMail(recipient, itemName, amount)
         end
         mailGui = GetMailGui()
     end
-    
     if not mailGui then return false end
-    
+
     local inputs = FindMailInputs(mailGui)
-    
-    -- Fill recipient
-    if inputs.recipient then
-        inputs.recipient.Text = recipient
-        task.wait(0.1)
-    end
-    
-    -- Select item
-    if inputs.item and itemName then
-        inputs.item.Text = itemName
-        task.wait(0.1)
-    end
-    
-    -- Set amount
-    if inputs.amount then
-        inputs.amount.Text = tostring(amount)
-        task.wait(0.1)
-    end
-    
-    -- Click send
+    if inputs.recipient then inputs.recipient.Text = recipient task.wait(0.1) end
+    if inputs.item and itemName then inputs.item.Text = itemName task.wait(0.1) end
+    if inputs.amount then inputs.amount.Text = tostring(amount) task.wait(0.1) end
     if inputs.sendBtn then
         firesignal(inputs.sendBtn.MouseButton1Click or inputs.sendBtn.Activated)
         task.wait(0.2)
@@ -520,21 +615,16 @@ local function SendMail(recipient, itemName, amount)
         giftStats.items = giftStats.items + amount
         return true
     end
-    
     return false
 end
 
--- Bypass: reset mail counter by manipulating the limit
 local function BypassMailLimit()
-    -- Find the mail counter object
     for _, obj in ipairs(Player.PlayerGui:GetDescendants()) do
         if obj:IsA("TextLabel") then
             local t = obj.Text:lower()
             if t:find("20") and (t:find("limit") or t:find("max") or t:find("remaining")) then
-                -- Try to reset via remote firing
                 for _, remote in ipairs(Workspace:GetDescendants()) do
                     if remote:IsA("RemoteEvent") and remote.Name:lower():find("mail") then
-                        -- Fire reset
                         pcall(function() remote:FireServer("reset") end)
                     end
                 end
@@ -543,75 +633,45 @@ local function BypassMailLimit()
     end
 end
 
--- Send massive mail (bypass 20x limit, up to 199,980x)
 local function SendMassMail(recipient, itemName, amountPerMail, totalMails)
     local successCount = 0
-    
     for i = 1, totalMails do
         if not _G.GiftingEnabled then break end
-        
-        -- Bypass every 20 mails
-        if i % 20 == 0 then
-            BypassMailLimit()
-            task.wait(0.5)
-        end
-        
+        if i % 20 == 0 then BypassMailLimit() task.wait(0.5) end
         local delay = _G.GiftDelay or 2000
-        if _G.GiftRandomDelay then
-            delay = delay + math.random(-500, 500)
-        end
-        
-        if SendMail(recipient, itemName, amountPerMail) then
-            successCount = successCount + 1
+        if _G.GiftRandomDelay then delay = delay + math.random(-500, 500) end
+        if SendMail(recipient, itemName, amountPerMail) then successCount = successCount + 1
         else
             giftStats.failed = giftStats.failed + 1
             if _G.GiftStopFlagged then break end
         end
-        
         if giftStatusLabel then
             giftStatusLabel.Text = string.format("  Sent: %d/%d | Items: %d | Failed: %d",
                 successCount, totalMails, successCount * amountPerMail, giftStats.failed)
         end
-        
         task.wait(delay / 1000)
     end
-    
     return successCount
 end
 
--- Mail to multiple recipients
-local function SendMassMailMulti(recipients, itemName, amountPerMail)
-    for _, recipient in ipairs(recipients) do
-        if not _G.GiftingEnabled then break end
-        SendMassMail(recipient, itemName, amountPerMail, _G.GiftMailCount or 50)
-    end
-end
-
--- Start gifting loop
 local function StartGifting()
     if giftConnection then giftConnection:Disconnect() end
-    
     giftConnection = RunService.Heartbeat:Connect(function()
         if not _G.GiftingEnabled then return end
-        
         local recipients = {}
         if _G.GiftAllFriends then
-            for _, friend in ipairs(Players:GetFriends()) do
-                table.insert(recipients, friend.Name)
-            end
+            for _, friend in ipairs(Players:GetFriends()) do table.insert(recipients, friend.Name) end
         elseif _G.GiftRandom then
             for _, p in ipairs(Players:GetPlayers()) do
                 if p ~= Player then table.insert(recipients, p.Name) end
             end
-            if #recipients > 0 then
-                recipients = {recipients[math.random(1, #recipients)]}
-            end
+            if #recipients > 0 then recipients = {recipients[math.random(1, #recipients)]} end
         elseif _G.GiftRecipient and _G.GiftRecipient ~= "" then
             recipients = {_G.GiftRecipient}
         end
-        
-        if #recipients > 0 and _G.GiftItem and _G.GiftItem ~= "" then
-            SendMassMailMulti(recipients, _G.GiftItem, _G.GiftAmountPerMail or 20)
+        local itemToSend = selectedGiftItem
+        if #recipients > 0 and itemToSend and itemToSend ~= "" then
+            SendMassMail(recipients[1], itemToSend, _G.GiftAmountPerMail or 20, _G.GiftMailCount or 50)
         end
     end)
 end
@@ -626,19 +686,11 @@ local function AutoAcceptTrade()
             if t:find("accept") or t:find("confirm") or t:find("trade") then
                 if gui.Visible then
                     firesignal(gui.MouseButton1Click or gui.Activated)
-                    
-                    -- Log the trade
-                    local log = {
-                        time = os.date("%Y-%m-%d %H:%M:%S"),
-                        action = "Accepted Trade",
-                    }
+                    local log = {time = os.date("%Y-%m-%d %H:%M:%S"), action = "Accepted Trade"}
                     table.insert(tradeLogs, log)
-                    
-                    -- Send webhook if configured
                     if _G.WebhookURL and _G.WebhookURL ~= "" then
                         SendWebhook("Trade Accepted at " .. log.time)
                     end
-                    
                     return true
                 end
             end
@@ -649,20 +701,11 @@ end
 
 local function SendWebhook(message)
     if not _G.WebhookURL or _G.WebhookURL == "" then return end
-    
     local data = {
         content = message,
-        embeds = {{
-            title = "LEBXIA • Garden 2",
-            description = message,
-            color = 65280,
-            footer = {text = os.date("%Y-%m-%d %H:%M:%S")}
-        }}
+        embeds = {{title = "LEBXIA • Garden 2", description = message, color = 65280, footer = {text = os.date("%Y-%m-%d %H:%M:%S")}}}
     }
-    
-    pcall(function()
-        HttpService:PostAsync(_G.WebhookURL, HttpService:JSONEncode(data))
-    end)
+    pcall(function() HttpService:PostAsync(_G.WebhookURL, HttpService:JSONEncode(data)) end)
 end
 
 -- ============================================================================
@@ -687,17 +730,13 @@ local function IsPlantReady(plant)
             for _, label in ipairs(child:GetDescendants()) do
                 if label:IsA("TextLabel") then
                     local text = label.Text:lower()
-                    if text:find("ready") or text:find("harvest") or text:find("0s") or text:find("0m") then
-                        return true
-                    end
+                    if text:find("ready") or text:find("harvest") or text:find("0s") or text:find("0m") then return true end
                 end
             end
         end
         if child:IsA("BasePart") then
             if child.Name:lower():find("fruit") or child.Name:lower():find("produce") then return true end
-            if child.BrickColor == BrickColor.new("Bright red") or child.BrickColor == BrickColor.new("Bright yellow") then
-                return true
-            end
+            if child.BrickColor == BrickColor.new("Bright red") or child.BrickColor == BrickColor.new("Bright yellow") then return true end
         end
     end
     return false
@@ -714,9 +753,7 @@ local function GetPlantWeight(plant)
             end
         end
     end
-    if plant.PrimaryPart then
-        return (plant.PrimaryPart.Size.X * plant.PrimaryPart.Size.Y * plant.PrimaryPart.Size.Z) / 10
-    end
+    if plant.PrimaryPart then return (plant.PrimaryPart.Size.X * plant.PrimaryPart.Size.Y * plant.PrimaryPart.Size.Z) / 10 end
     return 0
 end
 
@@ -891,7 +928,6 @@ local function StartFarmLoop()
     if farmConnection then farmConnection:Disconnect() end
     farmConnection = RunService.Heartbeat:Connect(function()
         if not _G.MasterAutofarm then return end
-        
         if _G.AutoCollect then
             local plants = GetPlants()
             for _, plant in ipairs(plants) do
@@ -905,7 +941,6 @@ local function StartFarmLoop()
             end
             task.wait((_G.CollectDelay or 500) / 1000)
         end
-        
         if _G.AutoSell then
             local shouldSell = true
             if _G.SellWhenFull then shouldSell = farmStats.collected >= (_G.SellFullThreshold or 10) end
@@ -914,12 +949,7 @@ local function StartFarmLoop()
             end
             task.wait((_G.SellDelay or 1000) / 1000)
         end
-        
-        if _G.AutoBuySeeds then
-            BuySeedsFromShop(_G.SeedType or "Best Profit")
-            task.wait(2)
-        end
-        
+        if _G.AutoBuySeeds then BuySeedsFromShop(_G.SeedType or "Best Profit") task.wait(2) end
         if _G.AutoPlant then
             local plots = GetEmptyPlots()
             if #plots > 0 then
@@ -930,7 +960,6 @@ local function StartFarmLoop()
             end
             task.wait(1.5)
         end
-        
         if _G.AutoWater then
             local allPlots = {}
             for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -945,7 +974,6 @@ local function StartFarmLoop()
             end
             task.wait(3)
         end
-        
         if statusLabel then
             statusLabel.Text = string.format("  C:%d S:%d 💰:%d 🌱:%d 💧:%d",
                 farmStats.collected, farmStats.sold, farmStats.earnings, farmStats.planted, farmStats.watered)
@@ -963,6 +991,114 @@ end
 local tabs = {"Autofarm", "📧 Mail", "📊 Inv", "🔧 Misc", "⚙️ Config"}
 local currentTab = nil
 local tabButtons = {}
+
+local function BuildGiftItemSelector()
+    AddSection("📦 Select Item to Send")
+    
+    -- Category buttons
+    AddLabel("Category:", Green)
+    local catLabel = AddLabel("  ➤ " .. selectedGiftCategory, AccentGold)
+    
+    AddButton("Switch Category (Seeds/Fruits/Gears)", function()
+        local cats = {"Seeds", "Fruits", "Gears"}
+        local idx = table.find(cats, selectedGiftCategory) or 1
+        selectedGiftCategory = cats[idx % #cats + 1]
+        selectedGiftItem = ItemDB[selectedGiftCategory][1]
+        catLabel.Text = "  ➤ " .. selectedGiftCategory
+        -- Rebuild the item list
+        BuildGiftItemSelector()
+    end)
+    
+    AddLabel("Selected Item:", Green)
+    local itemLabel = AddLabel("  ➤ " .. selectedGiftItem, AccentGold)
+    
+    -- Show items in current category with page system (12 per page)
+    local items = ItemDB[selectedGiftCategory]
+    local pageSize = 12
+    local totalPages = math.ceil(#items / pageSize)
+    local currentPage = _G.GiftItemPage or 1
+    
+    AddLabel("Page " .. currentPage .. "/" .. totalPages, TextSecondary)
+    
+    local startIdx = (currentPage - 1) * pageSize + 1
+    local endIdx = math.min(startIdx + pageSize - 1, #items)
+    
+    for i = startIdx, endIdx do
+        local item = items[i]
+        local btnFrame = Instance.new("Frame")
+        btnFrame.Size = UDim2.new(1, -8, 0, 28)
+        btnFrame.BackgroundColor3 = item == selectedGiftItem and GreenDark or BgElement
+        btnFrame.BorderSizePixel = 0
+        btnFrame.Parent = ScrollFrame
+        Instance.new("UICorner", btnFrame).CornerRadius = UDim.new(0, 4)
+        
+        local btnLabel = Instance.new("TextLabel")
+        btnLabel.Size = UDim2.new(1, -10, 1, 0)
+        btnLabel.Position = UDim2.new(0, 10, 0, 0)
+        btnLabel.BackgroundTransparency = 1
+        btnLabel.Text = item
+        btnLabel.TextColor3 = item == selectedGiftItem and Color3.fromRGB(255,255,255) or TextPrimary
+        btnLabel.TextSize = 11
+        btnLabel.Font = Enum.Font.Gotham
+        btnLabel.TextXAlignment = Enum.TextXAlignment.Left
+        btnLabel.Parent = btnFrame
+        
+        local selectBtn = Instance.new("TextButton")
+        selectBtn.Size = UDim2.new(1, 0, 1, 0)
+        selectBtn.BackgroundTransparency = 1
+        selectBtn.Text = ""
+        selectBtn.Parent = btnFrame
+        selectBtn.MouseButton1Click:Connect(function()
+            selectedGiftItem = item
+            itemLabel.Text = "  ➤ " .. selectedGiftItem
+            BuildGiftItemSelector()
+        end)
+        UpdateCanvas()
+    end
+    
+    -- Page navigation
+    if totalPages > 1 then
+        local navFrame = Instance.new("Frame")
+        navFrame.Size = UDim2.new(1, -8, 0, 30)
+        navFrame.BackgroundTransparency = 1
+        navFrame.Parent = ScrollFrame
+        UpdateCanvas()
+        
+        if currentPage > 1 then
+            local prevBtn = Instance.new("TextButton")
+            prevBtn.Size = UDim2.new(0, 80, 0, 28)
+            prevBtn.Position = UDim2.new(0, 0, 0, 0)
+            prevBtn.BackgroundColor3 = GreenDark
+            prevBtn.Text = "◀ Prev"
+            prevBtn.TextColor3 = Color3.fromRGB(255,255,255)
+            prevBtn.TextSize = 10
+            prevBtn.Font = Enum.Font.GothamBold
+            prevBtn.Parent = navFrame
+            Instance.new("UICorner", prevBtn).CornerRadius = UDim.new(0, 4)
+            prevBtn.MouseButton1Click:Connect(function()
+                _G.GiftItemPage = currentPage - 1
+                BuildGiftItemSelector()
+            end)
+        end
+        
+        if currentPage < totalPages then
+            local nextBtn = Instance.new("TextButton")
+            nextBtn.Size = UDim2.new(0, 80, 0, 28)
+            nextBtn.Position = UDim2.new(1, -80, 0, 0)
+            nextBtn.BackgroundColor3 = GreenDark
+            nextBtn.Text = "Next ▶"
+            nextBtn.TextColor3 = Color3.fromRGB(255,255,255)
+            nextBtn.TextSize = 10
+            nextBtn.Font = Enum.Font.GothamBold
+            nextBtn.Parent = navFrame
+            Instance.new("UICorner", nextBtn).CornerRadius = UDim.new(0, 4)
+            nextBtn.MouseButton1Click:Connect(function()
+                _G.GiftItemPage = currentPage + 1
+                BuildGiftItemSelector()
+            end)
+        end
+    end
+end
 
 local function BuildTab(tabName)
     ClearScroll()
@@ -1043,7 +1179,7 @@ local function BuildTab(tabName)
     
     elseif tabName == "📧 Mail" then
         AddSection("📧 Mail Bypass System")
-        AddLabel("Send up to 199,980x items per mail", AccentGold)
+        AddLabel("Send up to 199,980x items per cycle", AccentGold)
         AddLabel("Bypasses the 20 items per mail limit", TextSecondary)
         
         AddToggle("Enable Auto Gifting", false, function(v)
@@ -1058,8 +1194,9 @@ local function BuildTab(tabName)
         AddToggle("Gift All Friends", false, function(v) _G.GiftAllFriends = v end)
         AddToggle("Gift Random Players", false, function(v) _G.GiftRandom = v end)
         
-        AddSection("Item Settings")
-        AddTextbox("Item to Send", "e.g. Golden Seed", function(v) _G.GiftItem = v end)
+        BuildGiftItemSelector()
+        
+        AddSection("Amount Settings")
         AddSlider("Amount Per Mail", 1, 999, 20, "x", function(v) _G.GiftAmountPerMail = v end)
         AddSlider("Total Mails", 1, 9999, 50, " mails", function(v) _G.GiftMailCount = v end)
         AddSlider("Delay Between Mails", 100, 10000, 2000, "ms", function(v) _G.GiftDelay = v end)
@@ -1136,13 +1273,9 @@ local function BuildTab(tabName)
     elseif tabName == "⚙️ Config" then
         AddSection("About")
         AddLabel("🌱 LEBXIA HUB • Garden 2", Green)
-        AddLabel("v8.0 • Mail Bypass + Inv Calc", TextSecondary)
+        AddLabel("v8.5 • Item DB • Fixed Sliders", TextSecondary)
         AddLabel("✅ Autofarm • Mail • Trade • Webhook", TextSecondary)
-        AddSection("Features")
-        AddLabel("📧 Mail up to 199,980x per cycle", AccentGold)
-        AddLabel("📊 Inventory value calculator", AccentGold)
-        AddLabel("🔄 Auto-accept trades (fast)", AccentGold)
-        AddLabel("📋 Discord webhook logs", AccentGold)
+        AddLabel("📦 " .. #ItemDB.Seeds .. " Seeds | " .. #ItemDB.Fruits .. " Fruits | " .. #ItemDB.Gears .. " Gears", AccentGold)
         AddSection("Controls")
         AddButton("🔄 Refresh UI", function() BuildTab(currentTab) end)
         AddButton("⏹ Stop All", function()
@@ -1224,17 +1357,14 @@ spawn(function()
     end
 end)
 
--- Auto-accept trade watcher
 spawn(function()
     while task.wait(0.3) do
-        if _G.AutoAcceptTrade then
-            AutoAcceptTrade()
-        end
+        if _G.AutoAcceptTrade then AutoAcceptTrade() end
     end
 end)
 
 game.StarterGui:SetCore("SendNotification", {
     Title = "LEBXIA • Garden 2",
-    Text = "v8.0 • Mail Bypass + Inv + Trade",
+    Text = "v8.5 • Item DB + Fixed Sliders",
     Duration = 5,
 })
