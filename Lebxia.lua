@@ -1,13 +1,14 @@
 -- ============================================================
--- 🐾 .KenzyPets – Auto Pet Buyer + Rejoin (Per‑Pet Confirm)
+-- 🐾 .KenzyPets – Auto Pet Buyer + Inventory Timeout
 -- ============================================================
 -- CONFIG
 local WALK_SPEED = 35
-local CONFIRM_TIMEOUT = 4          -- seconds to wait per pet confirmation
+local CONFIRM_TIMEOUT = 4          -- seconds per pet confirmation
 local MAX_APPROACH_ATTEMPTS = 10
 local PROXIMITY_REQUIRED = 10
 local SCAN_INTERVAL = 1.0
-local CONSECUTIVE_EMPTY = 3        -- empty scans before rejoin check
+local CONSECUTIVE_EMPTY = 3        -- empty scans before inventory check
+local INVENTORY_TIMEOUT = 30       -- max seconds to wait for inventory update
 -- ============================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -110,7 +111,7 @@ local function addPetLabel(name, status)
     label.Size = UDim2.new(1, 0, 0, 20)
     label.BackgroundTransparency = 1
     label.Text = name .. " – " .. (status or "Queued")
-    label.TextColor3 = (status == "Bought") and Color3.fromRGB(100, 255, 100) 
+    label.TextColor3 = (status == "Bought") and Color3.fromRGB(100, 255, 100)
         or (status == "Moving" or status == "Buying" or status == "Waiting...") and Color3.fromRGB(255, 200, 100)
         or Color3.fromRGB(200, 200, 200)
     label.TextSize = 13
@@ -284,6 +285,26 @@ local function isTamable(part)
 end
 
 -- ============================================================
+-- 📊 Get reliable pet count
+-- ============================================================
+local function getPetCount()
+    local count = LocalPlayer:GetAttribute("PetCount")
+    if type(count) == "number" then
+        return count
+    end
+    local count2 = 0
+    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
+    if backpack then
+        for _, item in ipairs(backpack:GetChildren()) do
+            if item:IsA("Tool") and item:GetAttribute("Pet") ~= nil then
+                count2 = count2 + 1
+            end
+        end
+    end
+    return count2
+end
+
+-- ============================================================
 -- 🚶 Walk with consistent speed
 -- ============================================================
 local function walkTo(position)
@@ -313,7 +334,7 @@ local function walkTo(position)
 end
 
 -- ============================================================
--- 🎯 Main buying cycle – tracks every pet individually
+-- 🎯 Main buying cycle – with inventory timeout
 -- ============================================================
 local function runBuyingCycle()
     local tameRemote = getTameRemote()
@@ -333,9 +354,9 @@ local function runBuyingCycle()
         if child:IsA("TextLabel") then child:Destroy() end
     end
 
-    local pendingParts = {}      -- part -> true (we intend to buy)
-    local confirmedParts = {}    -- part -> true (confirmed bought)
-    local petLabels = {}         -- part -> GUI label
+    local pendingParts = {}      -- part -> true
+    local confirmedParts = {}    -- part -> true
+    local petLabels = {}
 
     -- Result listener
     local resultConnection
@@ -485,6 +506,8 @@ local function runBuyingCycle()
 
     -- Main loop
     local emptyScans = 0
+    local initialPetCount = getPetCount()
+    local totalIntended = 0   -- total pets we've tried to buy
     updateStatus("Scanning for pets...")
 
     while true do
@@ -503,34 +526,44 @@ local function runBuyingCycle()
             end
         end
 
-        -- If no tamable pets found, increment empty counter
+        totalIntended = getPendingCount()
+
+        -- If no tamable pets found, check inventory
         if #tamable == 0 then
             emptyScans = emptyScans + 1
-            local total = getPendingCount()
             local confirmed = getConfirmedCount()
             updateStatus("Scanning... (" .. emptyScans .. "/" .. CONSECUTIVE_EMPTY .. ")")
-            print("🔍 Empty scan #" .. emptyScans .. " | Pending: " .. total .. ", Confirmed: " .. confirmed)
+            print("🔍 Empty scan #" .. emptyScans .. " | Pending: " .. totalIntended .. ", Confirmed: " .. confirmed)
 
             if emptyScans >= CONSECUTIVE_EMPTY then
-                local allConfirmed = (confirmed == total and total > 0) or (total == 0)
-                if allConfirmed then
-                    updateStatus("✅ All " .. total .. " pets confirmed – rejoining")
-                    print("✅ All pending pets confirmed (" .. confirmed .. "/" .. total .. "). Rejoining...")
-                    if resultConnection then resultConnection:Disconnect() end
-                    return true
-                else
-                    print("⚠️ Pending: " .. total .. ", Confirmed: " .. confirmed .. " – not all confirmed. Waiting extra...")
-                    updateStatus("⚠️ Waiting for missing confirms...")
-                    task.wait(CONFIRM_TIMEOUT)
-                    if resultConnection then resultConnection:Disconnect() end
-                    return true
+                updateStatus("⏳ Waiting for inventory...")
+                print("⏳ Waiting up to " .. INVENTORY_TIMEOUT .. "s for pet count to increase by " .. totalIntended .. "...")
+                local startWait = os.clock()
+                local inventoryUpdated = false
+                while os.clock() - startWait < INVENTORY_TIMEOUT do
+                    local currentCount = getPetCount()
+                    if currentCount >= initialPetCount + totalIntended then
+                        inventoryUpdated = true
+                        break
+                    end
+                    task.wait(0.5)
                 end
+
+                if inventoryUpdated then
+                    updateStatus("✅ Inventory updated – rejoining")
+                    print("✅ Inventory count increased to " .. getPetCount() .. " (from " .. initialPetCount .. "). Rejoining...")
+                else
+                    updateStatus("⚠️ Inventory timeout – rejoining")
+                    print("⚠️ Timeout: only " .. getPetCount() .. " pets (expected " .. initialPetCount + totalIntended .. "). Rejoining...")
+                end
+
+                if resultConnection then resultConnection:Disconnect() end
+                return true
             end
             task.wait(SCAN_INTERVAL)
         else
             emptyScans = 0
             updateStatus("Buying " .. #tamable .. " pets...")
-            -- Attempt to buy all unconfirmed pending pets
             for part in pairs(pendingParts) do
                 if not confirmedParts[part] then
                     purchasePet(part)
