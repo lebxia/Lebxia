@@ -2,10 +2,10 @@
 -- 🐾 .KenzyPets – Auto Pet Buyer + FPS Boost + Smart Hide
 -- ============================================================
 -- CONFIG
-local WALK_SPEED = 40
+local WALK_SPEED = 35
 local CONFIRM_TIMEOUT = 2
 local MAX_APPROACH_ATTEMPTS = 10
-local PROXIMITY_REQUIRED = 15
+local PROXIMITY_REQUIRED = 10
 local SCAN_INTERVAL = 1.0
 local CONSECUTIVE_EMPTY = 3
 local INVENTORY_TIMEOUT = 30
