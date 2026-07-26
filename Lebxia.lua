@@ -3,9 +3,9 @@
 -- ============================================================
 -- CONFIG
 local WALK_SPEED = 35
-local CONFIRM_TIMEOUT = 4
+local CONFIRM_TIMEOUT = 2
 local MAX_APPROACH_ATTEMPTS = 10
-local PROXIMITY_REQUIRED = 10
+local PROXIMITY_REQUIRED = 20
 local SCAN_INTERVAL = 1.0
 local CONSECUTIVE_EMPTY = 3
 local INVENTORY_TIMEOUT = 30
@@ -673,6 +673,6 @@ while true do
     else
         updateStatus("⚠️ Retrying...")
         print("⚠️ Cycle failed, retrying...")
-        task.wait(3)
+        task.wait(1)
     end
 end
