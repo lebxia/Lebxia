@@ -1,16 +1,13 @@
 -- ============================================================
--- 🐾 .KenzyPets – Auto Pet Buyer + Rejoin (Inventory Check)
+-- 🐾 .KenzyPets – Auto Pet Buyer + Rejoin (Per‑Pet Confirm)
 -- ============================================================
 -- CONFIG
 local WALK_SPEED = 35
-local CONFIRM_TIMEOUT = 4
+local CONFIRM_TIMEOUT = 4          -- seconds to wait per pet confirmation
 local MAX_APPROACH_ATTEMPTS = 10
 local PROXIMITY_REQUIRED = 10
 local SCAN_INTERVAL = 1.0
-local CONSECUTIVE_EMPTY = 3
-
--- Wait after confirming all pets are bought – gives time for inventory to update
-local INVENTORY_WAIT = 3
+local CONSECUTIVE_EMPTY = 3        -- empty scans before rejoin check
 -- ============================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -23,7 +20,7 @@ local Workspace = game:GetService("Workspace")
 print("🚀 .KenzyPets loaded.")
 
 -- ============================================================
--- 🖥️ IMPROVED GUI .KenzyPets
+-- 🖥️ GUI – .KenzyPets
 -- ============================================================
 local gui = Instance.new("ScreenGui")
 gui.Name = "KenzyPetsGUI"
@@ -31,7 +28,7 @@ gui.ResetOnSpawn = false
 gui.Parent = game:GetService("CoreGui")
 
 local frame = Instance.new("Frame")
-frame.Size = UDim2.new(0, 300, 0, 380)
+frame.Size = UDim2.new(0, 300, 0, 420)
 frame.Position = UDim2.new(0.5, -150, 0.1, 0)
 frame.BackgroundColor3 = Color3.fromRGB(18, 18, 28)
 frame.BorderSizePixel = 0
@@ -70,6 +67,16 @@ statusLabel.TextSize = 12
 statusLabel.Font = Enum.Font.Gotham
 statusLabel.Parent = frame
 
+local progressLabel = Instance.new("TextLabel")
+progressLabel.Size = UDim2.new(1, 0, 0, 20)
+progressLabel.Position = UDim2.new(0, 0, 0, 60)
+progressLabel.BackgroundTransparency = 1
+progressLabel.Text = "Progress: 0/0"
+progressLabel.TextColor3 = Color3.fromRGB(200, 200, 200)
+progressLabel.TextSize = 12
+progressLabel.Font = Enum.Font.Gotham
+progressLabel.Parent = frame
+
 local closeBtn = Instance.new("TextButton")
 closeBtn.Size = UDim2.new(0, 30, 0, 30)
 closeBtn.Position = UDim2.new(1, -32, 0, 5)
@@ -84,8 +91,8 @@ closeBtn.MouseButton1Click:Connect(function()
 end)
 
 local scroll = Instance.new("ScrollingFrame")
-scroll.Size = UDim2.new(1, -10, 1, -80)
-scroll.Position = UDim2.new(0, 5, 0, 65)
+scroll.Size = UDim2.new(1, -10, 1, -120)
+scroll.Position = UDim2.new(0, 5, 0, 85)
 scroll.BackgroundTransparency = 1
 scroll.CanvasSize = UDim2.new(0, 0, 0, 0)
 scroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -98,12 +105,14 @@ listLayout.Parent = scroll
 listLayout.SortOrder = Enum.SortOrder.LayoutOrder
 listLayout.Padding = UDim.new(0, 2)
 
-local function addPetLabel(name)
+local function addPetLabel(name, status)
     local label = Instance.new("TextLabel")
     label.Size = UDim2.new(1, 0, 0, 20)
     label.BackgroundTransparency = 1
-    label.Text = name .. " – Queued"
-    label.TextColor3 = Color3.fromRGB(200, 200, 200)
+    label.Text = name .. " – " .. (status or "Queued")
+    label.TextColor3 = (status == "Bought") and Color3.fromRGB(100, 255, 100) 
+        or (status == "Moving" or status == "Buying" or status == "Waiting...") and Color3.fromRGB(255, 200, 100)
+        or Color3.fromRGB(200, 200, 200)
     label.TextSize = 13
     label.Font = Enum.Font.Gotham
     label.TextXAlignment = Enum.TextXAlignment.Left
@@ -115,8 +124,12 @@ local function updateStatus(text)
     statusLabel.Text = "Status: " .. text
 end
 
+local function updateProgress(confirmed, total)
+    progressLabel.Text = "Progress: " .. confirmed .. "/" .. total
+end
+
 -- ============================================================
--- 🧹 INSTANT HIDE OTHER GARDENS
+-- 🧹 INSTANT HIDE OTHER GARDENS (including fruits)
 -- ============================================================
 local function hideGarden(garden)
     pcall(function()
@@ -164,7 +177,25 @@ local function startHidingGardens()
     print("🧹 Garden hiding active.")
 end
 
+local function hideWorldFruits()
+    pcall(function()
+        for _, child in ipairs(Workspace:GetChildren()) do
+            if child:IsA("Model") and (string.find(child.Name, "Fruit") or string.find(child.Name, "Berry") or string.find(child.Name, "Apple")) then
+                if child.Name ~= LocalPlayer.Name then
+                    hideGarden(child)
+                end
+            end
+        end
+    end)
+end
+
 startHidingGardens()
+task.spawn(function()
+    while true do
+        hideWorldFruits()
+        task.wait(2)
+    end
+end)
 
 -- ============================================================
 -- 🔍 Remote and pet detection
@@ -205,6 +236,22 @@ local function getPacketRemote()
     return nil
 end
 
+local PetModules = nil
+local function getPetDisplayName(species)
+    if not PetModules then
+        local success, mod = pcall(function()
+            return require(ReplicatedStorage:WaitForChild("SharedModules"):WaitForChild("PetModules"))
+        end)
+        if success then
+            PetModules = mod
+        end
+    end
+    if PetModules and PetModules[species] and PetModules[species].DisplayName then
+        return PetModules[species].DisplayName
+    end
+    return species
+end
+
 local function getPetParts()
     local parts = {}
     local map = Workspace:FindFirstChild("Map")
@@ -236,28 +283,8 @@ local function isTamable(part)
     return owner == 0 or owner == nil
 end
 
--- Get current pet count from player attributes or a folder
-local function getPetCount()
-    -- Try attribute first
-    local count = LocalPlayer:GetAttribute("PetCount")
-    if type(count) == "number" then
-        return count
-    end
-    -- Fallback: count tools in backpack that have "Pet" attribute
-    local count2 = 0
-    local backpack = LocalPlayer:FindFirstChildOfClass("Backpack")
-    if backpack then
-        for _, item in ipairs(backpack:GetChildren()) do
-            if item:IsA("Tool") and item:GetAttribute("Pet") ~= nil then
-                count2 = count2 + 1
-            end
-        end
-    end
-    return count2
-end
-
 -- ============================================================
--- 🚶 Walk with consistent speed, follow moving pets
+-- 🚶 Walk with consistent speed
 -- ============================================================
 local function walkTo(position)
     local character = LocalPlayer.Character
@@ -286,7 +313,7 @@ local function walkTo(position)
 end
 
 -- ============================================================
--- 🎯 Main buying cycle – scan until no pets left + inventory wait
+-- 🎯 Main buying cycle – tracks every pet individually
 -- ============================================================
 local function runBuyingCycle()
     local tameRemote = getTameRemote()
@@ -301,40 +328,67 @@ local function runBuyingCycle()
     end
     print("✅ Tame remote found.")
 
+    -- Clear GUI
     for _, child in ipairs(scroll:GetChildren()) do
         if child:IsA("TextLabel") then child:Destroy() end
     end
 
-    local petLabels = {}
-    local boughtParts = {}
+    local pendingParts = {}      -- part -> true (we intend to buy)
+    local confirmedParts = {}    -- part -> true (confirmed bought)
+    local petLabels = {}         -- part -> GUI label
 
-    -- Track pet count before buying
-    local initialPetCount = getPetCount()
-    print("📊 Current pet count:", initialPetCount)
-
+    -- Result listener
     local resultConnection
     if resultRemote then
         resultConnection = resultRemote.OnClientEvent:Connect(function(part, userId)
             if userId == LocalPlayer.UserId and part and part:IsA("BasePart") then
-                if not boughtParts[part] then
-                    boughtParts[part] = true
+                if not confirmedParts[part] then
+                    confirmedParts[part] = true
+                    local species = part:GetAttribute("PetName") or part.Name
+                    local displayName = getPetDisplayName(species)
                     if petLabels[part] then
-                        petLabels[part].Text = part.Name .. " – ✅ Bought"
+                        petLabels[part].Text = displayName .. " – ✅ Bought"
                         petLabels[part].TextColor3 = Color3.fromRGB(100, 255, 100)
                     end
-                    print("✅ Confirmed: " .. part.Name)
+                    print("✅ Confirmed purchase (result): " .. displayName)
+                    updateProgress(getConfirmedCount(), getPendingCount())
                 end
             end
         end)
     end
 
+    local function getPendingCount()
+        local count = 0
+        for _ in pairs(pendingParts) do count = count + 1 end
+        return count
+    end
+    local function getConfirmedCount()
+        local count = 0
+        for _, v in pairs(confirmedParts) do if v then count = count + 1 end end
+        return count
+    end
+
+    local function addPendingPet(part)
+        if pendingParts[part] then return end
+        pendingParts[part] = true
+        local species = part:GetAttribute("PetName") or part.Name
+        local displayName = getPetDisplayName(species)
+        local label = addPetLabel(displayName, "Queued")
+        petLabels[part] = label
+        updateProgress(getConfirmedCount(), getPendingCount())
+        print("📌 Added pending: " .. displayName)
+    end
+
     local function purchasePet(part)
-        if boughtParts[part] then return true end
+        if confirmedParts[part] then return true end
+        local species = part:GetAttribute("PetName") or part.Name
+        local displayName = getPetDisplayName(species)
 
         if petLabels[part] then
-            petLabels[part].Text = part.Name .. " – Moving"
+            petLabels[part].Text = displayName .. " – Moving"
         end
 
+        -- Approach
         local attempts = 0
         local gotClose = false
         while attempts < MAX_APPROACH_ATTEMPTS do
@@ -361,15 +415,16 @@ local function runBuyingCycle()
 
         if not gotClose then
             if petLabels[part] then
-                petLabels[part].Text = part.Name .. " – ⚠️ Too far"
+                petLabels[part].Text = displayName .. " – ⚠️ Too far"
             end
             return false
         end
 
         if petLabels[part] then
-            petLabels[part].Text = part.Name .. " – Buying"
+            petLabels[part].Text = displayName .. " – Buying"
         end
 
+        -- Fire all methods
         local purchased = false
         pcall(function() tameRemote:FireServer(part) purchased = true end)
         if not purchased then pcall(function() tameRemote:Fire(part) purchased = true end) end
@@ -392,22 +447,25 @@ local function runBuyingCycle()
         end
 
         if petLabels[part] then
-            petLabels[part].Text = part.Name .. " – Waiting..."
+            petLabels[part].Text = displayName .. " – Waiting..."
         end
 
+        -- Wait for confirmation
         local startTime = os.clock()
         local confirmed = false
         while os.clock() - startTime < CONFIRM_TIMEOUT do
-            if boughtParts[part] then
+            if confirmedParts[part] then
                 confirmed = true
                 break
             end
             if part:GetAttribute("OwnerUserId") == LocalPlayer.UserId then
-                boughtParts[part] = true
+                confirmedParts[part] = true
                 if petLabels[part] then
-                    petLabels[part].Text = part.Name .. " – ✅ Bought"
+                    petLabels[part].Text = displayName .. " – ✅ Bought"
                     petLabels[part].TextColor3 = Color3.fromRGB(100, 255, 100)
                 end
+                print("✅ Confirmed (attribute): " .. displayName)
+                updateProgress(getConfirmedCount(), getPendingCount())
                 confirmed = true
                 break
             end
@@ -418,14 +476,17 @@ local function runBuyingCycle()
             return true
         else
             if petLabels[part] then
-                petLabels[part].Text = part.Name .. " – ❌ Not Confirmed"
+                petLabels[part].Text = displayName .. " – ❌ Not Confirmed"
                 petLabels[part].TextColor3 = Color3.fromRGB(255, 100, 100)
             end
             return false
         end
     end
 
-    local emptyCount = 0
+    -- Main loop
+    local emptyScans = 0
+    updateStatus("Scanning for pets...")
+
     while true do
         local parts = getPetParts()
         local tamable = {}
@@ -435,53 +496,55 @@ local function runBuyingCycle()
             end
         end
 
+        -- Add new tamable pets to pending
+        for _, part in ipairs(tamable) do
+            if not pendingParts[part] then
+                addPendingPet(part)
+            end
+        end
+
+        -- If no tamable pets found, increment empty counter
         if #tamable == 0 then
-            emptyCount = emptyCount + 1
-            updateStatus("Scanning... (" .. emptyCount .. "/" .. CONSECUTIVE_EMPTY .. ")")
-            if emptyCount >= CONSECUTIVE_EMPTY then
-                updateStatus("✅ No pets left – checking inventory...")
-                -- Wait until pet count increases or timeout (INVENTORY_WAIT)
-                local startWait = os.clock()
-                local finalPetCount = getPetCount()
-                while os.clock() - startWait < INVENTORY_WAIT do
-                    local newCount = getPetCount()
-                    if newCount > initialPetCount then
-                        finalPetCount = newCount
-                        break
-                    end
-                    task.wait(0.2)
+            emptyScans = emptyScans + 1
+            local total = getPendingCount()
+            local confirmed = getConfirmedCount()
+            updateStatus("Scanning... (" .. emptyScans .. "/" .. CONSECUTIVE_EMPTY .. ")")
+            print("🔍 Empty scan #" .. emptyScans .. " | Pending: " .. total .. ", Confirmed: " .. confirmed)
+
+            if emptyScans >= CONSECUTIVE_EMPTY then
+                local allConfirmed = (confirmed == total and total > 0) or (total == 0)
+                if allConfirmed then
+                    updateStatus("✅ All " .. total .. " pets confirmed – rejoining")
+                    print("✅ All pending pets confirmed (" .. confirmed .. "/" .. total .. "). Rejoining...")
+                    if resultConnection then resultConnection:Disconnect() end
+                    return true
+                else
+                    print("⚠️ Pending: " .. total .. ", Confirmed: " .. confirmed .. " – not all confirmed. Waiting extra...")
+                    updateStatus("⚠️ Waiting for missing confirms...")
+                    task.wait(CONFIRM_TIMEOUT)
+                    if resultConnection then resultConnection:Disconnect() end
+                    return true
                 end
-                print("📊 Pet count before: " .. initialPetCount .. ", after: " .. finalPetCount)
-                updateStatus("✅ Inventory updated – rejoining")
-                if resultConnection then resultConnection:Disconnect() end
-                return true
             end
             task.wait(SCAN_INTERVAL)
         else
-            emptyCount = 0
+            emptyScans = 0
             updateStatus("Buying " .. #tamable .. " pets...")
-            print("🔍 Found " .. #tamable .. " tamable pet(s). Buying...")
-            for _, part in ipairs(tamable) do
-                if not petLabels[part] then
-                    local label = addPetLabel(part.Name)
-                    petLabels[part] = label
+            -- Attempt to buy all unconfirmed pending pets
+            for part in pairs(pendingParts) do
+                if not confirmedParts[part] then
+                    purchasePet(part)
                 end
             end
-
-            for _, part in ipairs(tamable) do
-                purchasePet(part)
-            end
-
-            task.wait(SCAN_INTERVAL)
+            task.wait(0.5)
         end
     end
 end
 
 -- ============================================================
--- 🚀 AUTO‑EXECUTE LOOP (moves as soon as root exists)
+-- 🚀 AUTO‑EXECUTE LOOP
 -- ============================================================
 print("🚀 .KenzyPets started. Waiting for character...")
-
 while true do
     repeat
         task.wait(0.1)
