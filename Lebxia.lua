@@ -673,6 +673,6 @@ while true do
     else
         updateStatus("⚠️ Retrying...")
         print("⚠️ Cycle failed, retrying...")
-        task.wait(1)
+        task.wait(2)
     end
 end
