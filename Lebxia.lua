@@ -2,7 +2,7 @@
 -- 🐾 .KenzyPets – Auto Pet Buyer + Rejoin (Inventory Check)
 -- ============================================================
 -- CONFIG
-local WALK_SPEED = 40
+local WALK_SPEED = 35
 local CONFIRM_TIMEOUT = 4
 local MAX_APPROACH_ATTEMPTS = 10
 local PROXIMITY_REQUIRED = 10
