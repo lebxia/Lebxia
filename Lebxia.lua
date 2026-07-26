@@ -1,14 +1,14 @@
 -- ============================================================
--- 🐾 .KenzyPets – Auto Pet Buyer + Inventory Timeout
+-- 🐾 .KenzyPets – Auto Pet Buyer + FPS Boost + Smart Hide
 -- ============================================================
 -- CONFIG
 local WALK_SPEED = 35
-local CONFIRM_TIMEOUT = 4          -- seconds per pet confirmation
+local CONFIRM_TIMEOUT = 4
 local MAX_APPROACH_ATTEMPTS = 10
 local PROXIMITY_REQUIRED = 10
 local SCAN_INTERVAL = 1.0
-local CONSECUTIVE_EMPTY = 3        -- empty scans before inventory check
-local INVENTORY_TIMEOUT = 30       -- max seconds to wait for inventory update
+local CONSECUTIVE_EMPTY = 3
+local INVENTORY_TIMEOUT = 30
 -- ============================================================
 
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -17,11 +17,41 @@ local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local TweenService = game:GetService("TweenService")
 local Workspace = game:GetService("Workspace")
+local Lighting = game:GetService("Lighting")
+local UserSettings = game:GetService("UserSettings")
 
 print("🚀 .KenzyPets loaded.")
 
 -- ============================================================
--- 🖥️ GUI – .KenzyPets
+-- ⚡ FPS BOOST – Graphics Optimization (Safe)
+-- ============================================================
+local function optimizeGraphics()
+    pcall(function()
+        local graphicsMode = UserSettings:GetService("UserGameSettings")
+        if graphicsMode then
+            graphicsMode.ClassicFramerateMode = 2
+            graphicsMode.EnableFrameRateCap = true
+            graphicsMode.MaximumFramerate = 60
+        end
+        Lighting.GlobalShadows = false
+        Lighting.Brightness = 0.5
+        Lighting.Ambient = Color3.fromRGB(128, 128, 128)
+        Lighting.ClockTime = 12
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+        print("⚡ Graphics optimized.")
+    end)
+end
+optimizeGraphics()
+task.spawn(function()
+    while true do
+        task.wait(30)
+        optimizeGraphics()
+    end
+end)
+
+-- ============================================================
+-- 🖥️ GUI – .KenzyPets (unchanged)
 -- ============================================================
 local gui = Instance.new("ScreenGui")
 gui.Name = "KenzyPetsGUI"
@@ -130,76 +160,123 @@ local function updateProgress(confirmed, total)
 end
 
 -- ============================================================
--- 🧹 INSTANT HIDE OTHER GARDENS (including fruits)
+-- 🧹 SMART HIDE – Only hide other players' gardens & fruits
 -- ============================================================
-local function hideGarden(garden)
+local function hideObject(obj)
     pcall(function()
-        if garden:IsA("Folder") or garden:IsA("Model") then
-            for _, child in ipairs(garden:GetDescendants()) do
-                if child:IsA("BasePart") then
-                    child.Transparency = 1
-                    child.CanCollide = false
-                    child.CanQuery = false
-                    child.CanTouch = false
-                    child.Material = Enum.Material.Plastic
-                elseif child:IsA("Decal") then
-                    child.Transparency = 1
-                elseif child:IsA("ParticleEmitter") or child:IsA("Trail") or child:IsA("Beam") then
-                    child.Enabled = false
-                elseif child:IsA("Fire") or child:IsA("Smoke") or child:IsA("Sparkles") then
-                    child.Enabled = false
-                elseif child:IsA("BillboardGui") or child:IsA("SurfaceGui") then
-                    child.Enabled = false
-                end
-            end
-            if garden:IsA("Model") and garden.PrimaryPart then
-                garden.PrimaryPart.Transparency = 1
-            end
+        if obj:IsA("BasePart") then
+            obj.Transparency = 1
+            obj.CanCollide = false
+            obj.CanQuery = false
+            obj.CanTouch = false
+            obj.Material = Enum.Material.Plastic
+        elseif obj:IsA("Decal") then
+            obj.Transparency = 1
+        elseif obj:IsA("ParticleEmitter") or obj:IsA("Trail") or obj:IsA("Beam") then
+            obj.Enabled = false
+        elseif obj:IsA("Fire") or obj:IsA("Smoke") or obj:IsA("Sparkles") then
+            obj.Enabled = false
+        elseif obj:IsA("BillboardGui") or obj:IsA("SurfaceGui") then
+            obj.Enabled = false
         end
     end)
 end
 
-local function startHidingGardens()
-    local localName = LocalPlayer.Name
+local function isOurGarden(garden)
+    return garden.Name == LocalPlayer.Name
+end
+
+local function hideOtherGardens()
     local Gardens = Workspace:FindFirstChild("Gardens")
     if not Gardens then return end
 
     for _, garden in ipairs(Gardens:GetChildren()) do
-        if garden.Name ~= localName then
-            hideGarden(garden)
-        end
-    end
-
-    Gardens.ChildAdded:Connect(function(newGarden)
-        if newGarden.Name ~= localName then
-            hideGarden(newGarden)
-        end
-    end)
-    print("🧹 Garden hiding active.")
-end
-
-local function hideWorldFruits()
-    pcall(function()
-        for _, child in ipairs(Workspace:GetChildren()) do
-            if child:IsA("Model") and (string.find(child.Name, "Fruit") or string.find(child.Name, "Berry") or string.find(child.Name, "Apple")) then
-                if child.Name ~= LocalPlayer.Name then
-                    hideGarden(child)
+        if garden:IsA("Folder") or garden:IsA("Model") then
+            if not isOurGarden(garden) then
+                for _, child in ipairs(garden:GetDescendants()) do
+                    hideObject(child)
+                end
+                if garden:IsA("Model") and garden.PrimaryPart then
+                    garden.PrimaryPart.Transparency = 1
                 end
             end
         end
-    end)
+    end
 end
 
-startHidingGardens()
+local function hideFruitsAndPlants()
+    local keywords = {"Fruit", "Berry", "Apple", "Plant", "Tree", "Seed", "Crop", "Vegetable", "Garden", "Flower"}
+    for _, obj in ipairs(Workspace:GetDescendants()) do
+        if obj:IsA("Model") and obj.Name ~= LocalPlayer.Name then
+            local shouldHide = false
+            for _, kw in ipairs(keywords) do
+                if string.find(obj.Name, kw) then
+                    shouldHide = true
+                    break
+                end
+            end
+            if shouldHide then
+                -- Check if it's not the map or terrain (by parent)
+                local parent = obj.Parent
+                if parent and parent.Name ~= "Map" and parent.Name ~= "Terrain" and parent.Name ~= "WildPetRef" and parent.Name ~= "WildPetSpawns" then
+                    for _, child in ipairs(obj:GetDescendants()) do
+                        hideObject(child)
+                    end
+                end
+            end
+        end
+    end
+end
+
+-- Initial hide after a delay
+task.spawn(function()
+    print("⏳ Waiting 3 seconds for gardens to load...")
+    task.wait(3)
+    print("🧹 Hiding other players' gardens and fruits...")
+    hideOtherGardens()
+    hideFruitsAndPlants()
+    print("✅ Visual cleanup complete.")
+end)
+
+-- Watch for new objects
+Workspace.DescendantAdded:Connect(function(obj)
+    task.wait(0.1)
+    -- Check if it's a garden
+    if obj:IsA("Folder") or obj:IsA("Model") then
+        if obj.Name ~= LocalPlayer.Name and obj.Parent and obj.Parent.Name == "Gardens" then
+            for _, child in ipairs(obj:GetDescendants()) do
+                hideObject(child)
+            end
+        end
+    end
+    -- Check if it's a fruit/plant model outside gardens
+    local keywords = {"Fruit", "Berry", "Apple", "Plant", "Tree", "Seed", "Crop", "Vegetable", "Garden", "Flower"}
+    if obj:IsA("Model") and obj.Name ~= LocalPlayer.Name then
+        for _, kw in ipairs(keywords) do
+            if string.find(obj.Name, kw) then
+                local parent = obj.Parent
+                if parent and parent.Name ~= "Map" and parent.Name ~= "Terrain" and parent.Name ~= "WildPetRef" and parent.Name ~= "WildPetSpawns" then
+                    for _, child in ipairs(obj:GetDescendants()) do
+                        hideObject(child)
+                    end
+                end
+                break
+            end
+        end
+    end
+end)
+
+-- Periodic cleanup every 10 seconds
 task.spawn(function()
     while true do
-        hideWorldFruits()
-        task.wait(2)
+        task.wait(10)
+        hideOtherGardens()
+        hideFruitsAndPlants()
     end
 end)
 
 -- ============================================================
--- 🔍 Remote and pet detection
+-- 🔍 Remote and pet detection (unchanged)
 -- ============================================================
 local function getTameRemote()
     local success, Networking = pcall(function()
@@ -354,11 +431,10 @@ local function runBuyingCycle()
         if child:IsA("TextLabel") then child:Destroy() end
     end
 
-    local pendingParts = {}      -- part -> true
-    local confirmedParts = {}    -- part -> true
+    local pendingParts = {}
+    local confirmedParts = {}
     local petLabels = {}
 
-    -- Result listener
     local resultConnection
     if resultRemote then
         resultConnection = resultRemote.OnClientEvent:Connect(function(part, userId)
@@ -371,7 +447,7 @@ local function runBuyingCycle()
                         petLabels[part].Text = displayName .. " – ✅ Bought"
                         petLabels[part].TextColor3 = Color3.fromRGB(100, 255, 100)
                     end
-                    print("✅ Confirmed purchase (result): " .. displayName)
+                    print("✅✅✅ PET BOUGHT: " .. displayName)
                     updateProgress(getConfirmedCount(), getPendingCount())
                 end
             end
@@ -408,8 +484,8 @@ local function runBuyingCycle()
         if petLabels[part] then
             petLabels[part].Text = displayName .. " – Moving"
         end
+        print("🚶 Moving to " .. displayName)
 
-        -- Approach
         local attempts = 0
         local gotClose = false
         while attempts < MAX_APPROACH_ATTEMPTS do
@@ -426,7 +502,7 @@ local function runBuyingCycle()
                         break
                     else
                         if attempts < MAX_APPROACH_ATTEMPTS then
-                            print("   Pet moved, re‑approaching...")
+                            print("   Pet moved, re‑approaching... (attempt " .. attempts .. ")")
                             task.wait(0.2)
                         end
                     end
@@ -438,14 +514,15 @@ local function runBuyingCycle()
             if petLabels[part] then
                 petLabels[part].Text = displayName .. " – ⚠️ Too far"
             end
+            print("⚠️ Could not get close to " .. displayName)
             return false
         end
 
         if petLabels[part] then
             petLabels[part].Text = displayName .. " – Buying"
         end
+        print("💰 Buying " .. displayName)
 
-        -- Fire all methods
         local purchased = false
         pcall(function() tameRemote:FireServer(part) purchased = true end)
         if not purchased then pcall(function() tameRemote:Fire(part) purchased = true end) end
@@ -470,8 +547,8 @@ local function runBuyingCycle()
         if petLabels[part] then
             petLabels[part].Text = displayName .. " – Waiting..."
         end
+        print("⏳ Waiting for confirmation for " .. displayName)
 
-        -- Wait for confirmation
         local startTime = os.clock()
         local confirmed = false
         while os.clock() - startTime < CONFIRM_TIMEOUT do
@@ -485,7 +562,7 @@ local function runBuyingCycle()
                     petLabels[part].Text = displayName .. " – ✅ Bought"
                     petLabels[part].TextColor3 = Color3.fromRGB(100, 255, 100)
                 end
-                print("✅ Confirmed (attribute): " .. displayName)
+                print("✅✅✅ PET BOUGHT (attribute): " .. displayName)
                 updateProgress(getConfirmedCount(), getPendingCount())
                 confirmed = true
                 break
@@ -500,15 +577,16 @@ local function runBuyingCycle()
                 petLabels[part].Text = displayName .. " – ❌ Not Confirmed"
                 petLabels[part].TextColor3 = Color3.fromRGB(255, 100, 100)
             end
+            print("❌ Purchase not confirmed for " .. displayName)
             return false
         end
     end
 
-    -- Main loop
     local emptyScans = 0
     local initialPetCount = getPetCount()
-    local totalIntended = 0   -- total pets we've tried to buy
+    local totalIntended = 0
     updateStatus("Scanning for pets...")
+    print("📊 Initial pet count: " .. initialPetCount)
 
     while true do
         local parts = getPetParts()
@@ -519,7 +597,6 @@ local function runBuyingCycle()
             end
         end
 
-        -- Add new tamable pets to pending
         for _, part in ipairs(tamable) do
             if not pendingParts[part] then
                 addPendingPet(part)
@@ -528,7 +605,6 @@ local function runBuyingCycle()
 
         totalIntended = getPendingCount()
 
-        -- If no tamable pets found, check inventory
         if #tamable == 0 then
             emptyScans = emptyScans + 1
             local confirmed = getConfirmedCount()
@@ -538,6 +614,8 @@ local function runBuyingCycle()
             if emptyScans >= CONSECUTIVE_EMPTY then
                 updateStatus("⏳ Waiting for inventory...")
                 print("⏳ Waiting up to " .. INVENTORY_TIMEOUT .. "s for pet count to increase by " .. totalIntended .. "...")
+                print("   Current pet count: " .. getPetCount() .. ", expected: " .. initialPetCount + totalIntended)
+
                 local startWait = os.clock()
                 local inventoryUpdated = false
                 while os.clock() - startWait < INVENTORY_TIMEOUT do
@@ -558,12 +636,14 @@ local function runBuyingCycle()
                 end
 
                 if resultConnection then resultConnection:Disconnect() end
+                print("🔄 Rejoining now...")
                 return true
             end
             task.wait(SCAN_INTERVAL)
         else
             emptyScans = 0
             updateStatus("Buying " .. #tamable .. " pets...")
+            print("🛒 Buying " .. #tamable .. " pets (pending: " .. totalIntended .. ")")
             for part in pairs(pendingParts) do
                 if not confirmedParts[part] then
                     purchasePet(part)
@@ -592,6 +672,7 @@ while true do
         task.wait(5)
     else
         updateStatus("⚠️ Retrying...")
+        print("⚠️ Cycle failed, retrying...")
         task.wait(3)
     end
 end
